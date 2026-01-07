@@ -3,48 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro v5 - Flipped Display</title>
+    <title>Curling Pro v6 - Stable</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* タイマーを画面中央に配置し、-90度回転させる */
-        #timer-container { 
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 100;
-        }
-        #timer { 
-            font-size: 120px; 
-            font-weight: bold; 
-            text-shadow: 4px 4px 8px #000; 
-            color: #0f0; 
-            display: inline-block;
-            transform: rotate(-90deg); /* 【ここを-90度に変更しました】 */
-            white-space: nowrap;
-        }
+        #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
+        #timer { font-size: 120px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
         
         .ui-msg-container { position: absolute; top: 20px; width: 100%; pointer-events: none; }
         #msg { background: rgba(0,0,0,0.7); display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 18px; transform: rotate(-90deg); }
         
         .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 8px;}
         button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
-        #peer-id-display { font-size: 16px; font-weight: bold; background: #f00; color: #fff; padding: 8px; border-radius: 4px; box-shadow: 0 0 10px rgba(255,0,0,0.5);}
+        #peer-id-display { font-size: 14px; font-weight: bold; background: #333; color: #fff; padding: 8px; border-radius: 4px; }
+        
+        /* エラー表示用（デバッグ用） */
+        #error-log { position: absolute; bottom: 0; width: 100%; background: rgba(255,0,0,0.8); font-size: 10px; z-index: 300; display: none; }
     </style>
 </head>
 <body>
     <div id="container">
+        <div id="error-log"></div>
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         
         <div class="controls">
             <button onclick="calibrate()">1. 背景セット</button>
-            <div id="peer-id-display">ID: 発行中...</div>
+            <div id="peer-id-display">ID: 準備中...</div>
         </div>
 
         <div id="timer-container">
@@ -52,11 +40,11 @@
         </div>
         
         <div class="ui-msg-container">
-            <div id="msg">準備中</div>
+            <div id="msg">カメラ起動を待っています</div>
         </div>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" onerror="showError('通信ライブラリの読み込みに失敗しました。ネット接続を確認してください')"></script>
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -64,31 +52,52 @@
         const timerDisplay = document.getElementById('timer');
         const msgDisplay = document.getElementById('msg');
         const idDisplay = document.getElementById('peer-id-display');
+        const errorLog = document.getElementById('error-log');
 
-        let startTime = 0;
-        let isRunning = false;
-        let isCoolingDown = false;
-        let baseStartColor = null;
-        let baseEndColor = null;
+        function showError(text) {
+            errorLog.innerText = text;
+            errorLog.style.display = "block";
+            console.error(text);
+        }
 
+        let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         const zones = {
-            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow", label: "START" },
-            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan",   label: "GOAL" }
+            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow" },
+            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan" }
         };
-
         let draggingZone = null;
 
-        function generateShortId(length) {
-            let result = '';
-            const characters = 'abcdefghjkmnpqrstuvwxyz23456789';
-            for (let i = 0; i < length; i++) { result += characters.charAt(Math.floor(Math.random() * characters.length)); }
-            return result;
-        }
-        const myShortId = generateShortId(6);
+        // ID生成
+        const myShortId = Math.random().toString(36).substring(2, 8);
 
+        // 1. カメラを先に起動
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
+            .then(stream => {
+                video.srcObject = stream;
+                msgDisplay.innerText = "背景セット待ち";
+                requestAnimationFrame(analyze);
+                startPeer(); // カメラが成功したら通信を開始
+            })
+            .catch(err => {
+                showError("カメラ起動エラー: " + err.name + ". ブラウザの設定でカメラを許可してください。");
+            });
 
+        // 2. 通信機能の開始
+        function startPeer() {
+            try {
+                const peer = new Peer(myShortId);
+                peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
+                peer.on('error', err => { showError("通信エラー: " + err.type); });
+                peer.on('connection', (c) => { 
+                    window.conn = c; 
+                    msgDisplay.innerText = "iPad 連携OK"; 
+                });
+            } catch (e) {
+                showError("PeerJS起動失敗: " + e.message);
+            }
+        }
+
+        // --- (以下、ドラッグや計測のロジックは前回と同じですが、安定化させています) ---
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
@@ -110,11 +119,4 @@
         function getAverageColor(zone) {
             const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
             const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
-            const data = ctx.getImageData(x, y, 10, 10).data;
-            let r = 0, g = 0, b = 0;
-            for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
-            return (r + g + b) / (data.length / 4 * 3);
-        }
-
-        function calibrate() {
-            baseStartColor = get
+            const data = ctx.getImageData(x, y, 10, 10).
