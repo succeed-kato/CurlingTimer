@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Auto Timer</title>
+    <title>Curling Auto Timer v2</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -11,9 +11,9 @@
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         .ui { position: absolute; bottom: 20px; width: 100%; pointer-events: none; }
         #timer { font-size: 60px; font-weight: bold; text-shadow: 2px 2px 4px #000; color: #0f0; }
-        #msg { background: rgba(0,0,0,0.5); display: inline-block; padding: 5px 15px; border-radius: 20px; }
+        #msg { background: rgba(0,0,0,0.6); display: inline-block; padding: 10px 20px; border-radius: 20px; }
         .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; }
-        button { padding: 10px; background: #444; color: #fff; border: 1px solid #fff; }
+        button { padding: 15px; background: #2196F3; color: #fff; border: none; border-radius: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -22,13 +22,13 @@
         <canvas id="canvas"></canvas>
         
         <div class="controls">
-            <button onclick="calibrate()">背景をセット</button>
-            <div id="peer-id" style="font-size: 12px; margin-top: 5px;">ID: 読み込み中...</div>
+            <button onclick="calibrate()">背景をセット (リセット)</button>
+            <div id="peer-id" style="font-size: 12px; margin-top: 5px; background: rgba(0,0,0,0.5);">ID取得中...</div>
         </div>
 
         <div class="ui">
             <div id="timer">0.00s</div>
-            <div id="msg">ストーンが枠を通ると計測します</div>
+            <div id="msg">まずは「背景をセット」を押してね</div>
         </div>
     </div>
 
@@ -42,23 +42,33 @@
 
         let startTime = 0;
         let isRunning = false;
-        let lastResult = "0.00";
-        let baseFrame = null;
+        let baseStartColor = null;
+        let baseEndColor = null;
 
-        // 検知エリアの設定 (スタート: 遠くのハック, ゴール: 手前のホグ)
-        const startZone = { x: 0.45, y: 0.2, w: 0.1, h: 0.1 }; // 画面中央上の遠く
-        const endZone = { x: 0.1, y: 0.7, w: 0.8, h: 0.2 };   // 画面下側の手前
+        // 枠の位置設定
+        const startZone = { x: 0.45, y: 0.2, w: 0.1, h: 0.1 }; // 黄色：遠く
+        const endZone = { x: 0.1, y: 0.7, w: 0.8, h: 0.2 };   // 青色：手前
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
 
+        function getAverageColor(zone) {
+            const data = ctx.getImageData(zone.x * canvas.width, zone.y * canvas.height, 10, 10).data;
+            let r = 0, g = 0, b = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                r += data[i]; g += data[i+1]; b += data[i+2];
+            }
+            return (r + g + b) / (data.length / 4 * 3); // 明るさの平均
+        }
+
         function calibrate() {
-            // 現在の画面を「誰もいない状態」として記憶
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = 100; tempCanvas.height = 100;
-            tempCanvas.getContext('2d').drawImage(video, 0, 0, 100, 100);
-            baseFrame = tempCanvas.getContext('2d').getImageData(0, 0, 100, 100).data;
-            msgDisplay.innerText = "背景セット完了！";
+            baseStartColor = getAverageColor(startZone);
+            baseEndColor = getAverageColor(endZone);
+            isRunning = false;
+            startTime = 0;
+            timerDisplay.innerText = "0.00s";
+            timerDisplay.style.color = "#0f0";
+            msgDisplay.innerText = "準備完了！枠を何かが通ると測ります";
         }
 
         function analyze() {
@@ -67,11 +77,10 @@
                 canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // 枠を描画
                 drawZone(startZone, "yellow");
                 drawZone(endZone, "cyan");
 
-                if (baseFrame) {
+                if (baseStartColor !== null) {
                     checkMotion();
                 }
             }
@@ -89,34 +98,36 @@
         }
 
         function checkMotion() {
-            // エリア内の色の変化を簡易チェック
-            const sData = ctx.getImageData(startZone.x * canvas.width, startZone.y * canvas.height, 10, 10).data;
-            const eData = ctx.getImageData(endZone.x * canvas.width, endZone.y * canvas.height, 10, 10).data;
-            
-            let sDiff = Math.abs(sData[0] - 128); // 簡易的な変化検知
-            let eDiff = Math.abs(eData[0] - 128);
+            const currentStart = getAverageColor(startZone);
+            const currentEnd = getAverageColor(endZone);
 
-            // スタート検知
-            if (!isRunning && sDiff > 50) {
+            const startDiff = Math.abs(currentStart - baseStartColor);
+            const endDiff = Math.abs(currentEnd - baseEndColor);
+
+            // 感度設定（30以上変化したら「動いた」とみなす）
+            const threshold = 30;
+
+            // スタート判定
+            if (!isRunning && startDiff > threshold) {
                 startTime = Date.now();
                 isRunning = true;
                 timerDisplay.style.color = "red";
+                msgDisplay.innerText = "計測中...";
             }
-            // ゴール検知
-            if (isRunning && (Date.now() - startTime > 2000) && eDiff > 50) {
+
+            // ストップ判定（開始から1.5秒以上経ってから反応するようにして誤作動防止）
+            if (isRunning && (Date.now() - startTime > 1500) && endDiff > threshold) {
                 isRunning = false;
                 timerDisplay.style.color = "#0f0";
+                msgDisplay.innerText = "ストップ！";
                 sendToiPad(timerDisplay.innerText);
             }
         }
 
-        // iPad連携用の設定
+        // iPad連携
         const peer = new Peer();
-        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPadでこのIDを入力: " + id; });
-        function sendToiPad(val) {
-            // ここでiPad側にデータを飛ばす処理（次回完成させます）
-            console.log("Sending to iPad: " + val);
-        }
+        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPad連携用ID: " + id; });
+        function sendToiPad(val) { console.log("Sending: " + val); }
     </script>
 </body>
 </html>
