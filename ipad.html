@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curling iPad Monitor</title>
+    <style>
+        body { margin: 0; background: #111; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        #status { position: absolute; top: 20px; font-size: 18px; color: #aaa; }
+        #result-box { text-align: center; }
+        .label { font-size: 40px; color: #2196F3; margin-bottom: 20px; }
+        #time { font-size: 200px; font-weight: bold; color: #0f0; line-height: 1; }
+        .setup { background: #333; padding: 30px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        input { font-size: 24px; padding: 10px; width: 250px; border-radius: 10px; border: none; margin-bottom: 20px; text-align: center; }
+        button { font-size: 24px; padding: 15px 40px; background: #2196F3; color: white; border: none; border-radius: 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div id="status">未接続</div>
+
+    <div id="setup-screen" class="setup">
+        <div class="label" style="font-size: 24px; color: white;">Androidに表示されている<br>IDを入力してください</div>
+        <input type="text" id="peer-id-input" placeholder="例: abc-123-xyz"><br>
+        <button onclick="connectToAndroid()">連携スタート</button>
+    </div>
+
+    <div id="display-screen" style="display: none;">
+        <div class="label">LAST SHOT</div>
+        <div id="time">0.00s</div>
+    </div>
+
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        const peer = new Peer();
+        let conn;
+
+        function connectToAndroid() {
+            const targetId = document.getElementById('peer-id-input').value;
+            if (!targetId) return alert("IDを入力してください");
+
+            document.getElementById('status').innerText = "接続中...";
+            
+            // Androidに接続
+            conn = peer.connect(targetId);
+
+            conn.on('open', () => {
+                document.getElementById('status').innerText = "接続完了！";
+                document.getElementById('setup-screen').style.display = "none";
+                document.getElementById('display-screen').style.display = "block";
+            });
+
+            // タイムデータが送られてきた時の処理
+            conn.on('data', (data) => {
+                document.getElementById('time').innerText = data;
+                // タイムが更新されたら少し画面を光らせる演出
+                document.body.style.backgroundColor = "#222";
+                setTimeout(() => { document.body.style.backgroundColor = "#111"; }, 200);
+            });
+        }
+    </script>
+</body>
+</html>
