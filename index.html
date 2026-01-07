@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - 15s Reset with iPad Sync</title>
+    <title>Curling Pro - 10s Reset Sync</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -138,13 +138,14 @@
                 
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
 
+                // リセット時間を10000（10秒）に設定
                 setTimeout(() => { 
                     isCoolingDown = false; 
                     timerDisplay.innerText = "0.00s"; 
                     msgDisplay.innerText = "Next Shot OK";
-                    // 【追加】15秒経ったらiPadにOK信号を送る
+                    // iPadにOK信号を送る
                     try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
-                }, 15000);
+                }, 10000);
             }
         }
     </script>
