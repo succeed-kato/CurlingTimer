@@ -2,18 +2,24 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Auto Timer v2</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
+    <title>Curling Auto Timer Landscape</title>
     <style>
+        /* 横向きレイアウト調整 */
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; }
-        #container { position: relative; width: 100vw; height: 100vh; }
-        video { width: 100%; height: 100%; object-fit: cover; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .ui { position: absolute; bottom: 20px; width: 100%; pointer-events: none; }
-        #timer { font-size: 60px; font-weight: bold; text-shadow: 2px 2px 4px #000; color: #0f0; }
-        #msg { background: rgba(0,0,0,0.6); display: inline-block; padding: 10px 20px; border-radius: 20px; }
-        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; }
-        button { padding: 15px; background: #2196F3; color: #fff; border: none; border-radius: 5px; font-weight: bold; }
+        #container { position: relative; width: 100vw; height: 100vh; background: #000; }
+        /* 映像が横長に収まるように調整 */
+        video { width: 100%; height: 100%; object-fit: contain; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; /*pointer-events: none;*/ }
+        
+        /* UI配置の調整 */
+        .ui { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: auto; padding: 10px; pointer-events: none; }
+        #timer { font-size: 80px; font-weight: bold; text-shadow: 3px 3px 6px #000; color: #0f0; line-height: 1; }
+        #msg { background: rgba(0,0,0,0.6); display: inline-block; padding: 5px 15px; border-radius: 15px; font-size: 14px;}
+        
+        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 10;}
+        button { padding: 10px 20px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 5px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
+        #peer-id { font-size: 10px; margin-top: 5px; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 4px;}
     </style>
 </head>
 <body>
@@ -22,13 +28,13 @@
         <canvas id="canvas"></canvas>
         
         <div class="controls">
-            <button onclick="calibrate()">背景をセット (リセット)</button>
-            <div id="peer-id" style="font-size: 12px; margin-top: 5px; background: rgba(0,0,0,0.5);">ID取得中...</div>
+            <button onclick="calibrate()">Set Background (リセット)</button>
+            <div id="peer-id">ID取得中...</div>
         </div>
 
         <div class="ui">
+            <div id="msg">スマホを横向きにして「Set Background」を押してね</div>
             <div id="timer">0.00s</div>
-            <div id="msg">まずは「背景をセット」を押してね</div>
         </div>
     </div>
 
@@ -45,89 +51,7 @@
         let baseStartColor = null;
         let baseEndColor = null;
 
-        // 枠の位置設定
-        const startZone = { x: 0.45, y: 0.2, w: 0.1, h: 0.1 }; // 黄色：遠く
-        const endZone = { x: 0.1, y: 0.7, w: 0.8, h: 0.2 };   // 青色：手前
-
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
-
-        function getAverageColor(zone) {
-            const data = ctx.getImageData(zone.x * canvas.width, zone.y * canvas.height, 10, 10).data;
-            let r = 0, g = 0, b = 0;
-            for (let i = 0; i < data.length; i += 4) {
-                r += data[i]; g += data[i+1]; b += data[i+2];
-            }
-            return (r + g + b) / (data.length / 4 * 3); // 明るさの平均
-        }
-
-        function calibrate() {
-            baseStartColor = getAverageColor(startZone);
-            baseEndColor = getAverageColor(endZone);
-            isRunning = false;
-            startTime = 0;
-            timerDisplay.innerText = "0.00s";
-            timerDisplay.style.color = "#0f0";
-            msgDisplay.innerText = "準備完了！枠を何かが通ると測ります";
-        }
-
-        function analyze() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                drawZone(startZone, "yellow");
-                drawZone(endZone, "cyan");
-
-                if (baseStartColor !== null) {
-                    checkMotion();
-                }
-            }
-            if (isRunning) {
-                const elapsed = (Date.now() - startTime) / 1000;
-                timerDisplay.innerText = elapsed.toFixed(2) + "s";
-            }
-            requestAnimationFrame(analyze);
-        }
-
-        function drawZone(z, color) {
-            ctx.strokeStyle = color;
-            ctx.lineWidth = 4;
-            ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
-        }
-
-        function checkMotion() {
-            const currentStart = getAverageColor(startZone);
-            const currentEnd = getAverageColor(endZone);
-
-            const startDiff = Math.abs(currentStart - baseStartColor);
-            const endDiff = Math.abs(currentEnd - baseEndColor);
-
-            // 感度設定（30以上変化したら「動いた」とみなす）
-            const threshold = 30;
-
-            // スタート判定
-            if (!isRunning && startDiff > threshold) {
-                startTime = Date.now();
-                isRunning = true;
-                timerDisplay.style.color = "red";
-                msgDisplay.innerText = "計測中...";
-            }
-
-            // ストップ判定（開始から1.5秒以上経ってから反応するようにして誤作動防止）
-            if (isRunning && (Date.now() - startTime > 1500) && endDiff > threshold) {
-                isRunning = false;
-                timerDisplay.style.color = "#0f0";
-                msgDisplay.innerText = "ストップ！";
-                sendToiPad(timerDisplay.innerText);
-            }
-        }
-
-        // iPad連携
-        const peer = new Peer();
-        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPad連携用ID: " + id; });
-        function sendToiPad(val) { console.log("Sending: " + val); }
-    </script>
-</body>
-</html>
+        // 【ここを変更しました】横向き用の枠配置
+        // x, y は左上からの割合(0.0〜1.0), w は幅, h は高さ
+        const startZone = { x: 0.02, y: 0.3, w: 0.15, h: 0.4 }; // 黄色：左側（遠く）
+        const endZone =   { x: 0.83, y: 0.0, w: 0.15, h: 1.0 }; // 青色：右
