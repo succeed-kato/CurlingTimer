@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Stable Connection</title>
+    <title>Curling Pro - 15s Reset</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        #container { position: relative; width: 100vw; height: 100vh; background: #000; }
+        #container { position: relative; width: 100vw; height: 100vh; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
@@ -18,7 +18,7 @@
         
         .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 8px;}
         button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
-        #peer-id-display { font-size: 15px; font-weight: bold; background: #f00; color: #fff; padding: 8px; border-radius: 4px; }
+        #peer-id-display { font-size: 14px; font-weight: bold; background: #333; color: #fff; padding: 8px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -26,7 +26,8 @@
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         <div class="controls">
-            <button onclick="calibrate()">リセット</button>
+            <button onclick="calibrate()">リセット>リセット>りせ>
+            <button onclick="location.reload()" style="background:#f44336;">アプリ再起動</button>
             <div id="peer-id-display">ID: 取得中...</div>
         </div>
         <div id="timer-container"><div id="timer">0.00s</div></div>
@@ -48,44 +49,29 @@
             end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan" }
         };
         let draggingZone = null;
-        let conn = null; // 通信オブジェクト保持用
+        let conn = null;
 
-        // ID生成
-        function generateShortId() { return Math.random().toString(36).substring(2, 8); }
-
-        // カメラ起動
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); startPeer(); });
+            .then(stream => { 
+                video.srcObject = stream; 
+                msgDisplay.innerText = "背景をセットしてください";
+                requestAnimationFrame(analyze); 
+            })
+            .catch(err => { msgDisplay.innerText = "カメラエラー"; });
 
-        // 通信機能 (何度でも接続を受け入れられるように設定)
         function startPeer() {
-            const myId = generateShortId();
+            const myId = Math.random().toString(36).substring(2, 8);
             const peer = new Peer(myId);
-            
-            peer.on('open', id => { 
-                idDisplay.innerText = "iPad ID: " + id; 
-                msgDisplay.innerText = "接続待ち...";
-            });
-
-            // 新しい接続があった時 (iPadがリセットされた時など)
+            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
             peer.on('connection', (newConn) => { 
-                conn = newConn; // 新しい接続を保存
-                msgDisplay.innerText = "iPad 連携OK"; 
+                conn = newConn;
+                msgDisplay.innerText = "iPad連携OK"; 
                 idDisplay.style.background = "#4CAF50";
-
-                conn.on('close', () => {
-                    msgDisplay.innerText = "iPad 切断 (再接続待ち)";
-                    idDisplay.style.background = "#f00";
-                    conn = null;
-                });
             });
-
-            peer.on('error', (err) => {
-                if(err.type === 'unavailable-id') startPeer();
-            });
+            peer.on('error', () => { setTimeout(startPeer, 3000); });
         }
+        startPeer();
 
-        // --- ドラッグ操作 (枠の移動) ---
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
@@ -105,12 +91,14 @@
         canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
 
         function getAverageColor(zone) {
-            const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
-            const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
-            const data = ctx.getImageData(x, y, 10, 10).data;
-            let r = 0, g = 0, b = 0;
-            for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
-            return (r + g + b) / 300;
+            try {
+                const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
+                const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
+                const data = ctx.getImageData(x, y, 10, 10).data;
+                let r = 0, g = 0, b = 0;
+                for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
+                return (r + g + b) / 300;
+            } catch(e) { return 0; }
         }
 
         function calibrate() {
@@ -130,14 +118,11 @@
                     ctx.strokeStyle = z.color; ctx.lineWidth = 6;
                     ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
                 }
-                // 背景セットが済んでいれば判定開始
                 if (baseStartColor !== null && !isCoolingDown) checkMotion();
             }
             if (isRunning) {
-                const elapsed = (Date.now() - startTime) / 1000;
-                timerDisplay.innerText = elapsed.toFixed(2) + "s";
+                timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s";
             }
-            // 通信エラーがあっても、このループだけは絶対に止めない
             requestAnimationFrame(analyze);
         }
 
@@ -152,23 +137,16 @@
             if (isRunning && (Date.now() - startTime > 1500) && eDiff > 35) {
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
-                const finalTime = timerDisplay.innerText;
+                const fTime = timerDisplay.innerText;
                 
-                // iPadに送信 (失敗してもAndroidの処理は続ける)
-                try {
-                    if (conn && conn.open) {
-                        conn.send(finalTime);
-                    }
-                } catch (e) {
-                    console.log("送信失敗（iPadが接続されていません）");
-                }
+                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
 
-                // 3秒後にリセットして次の計測へ
+                // 【ここを15000（15秒）に変更しました】
                 setTimeout(() => { 
                     isCoolingDown = false; 
                     timerDisplay.innerText = "0.00s"; 
-                    msgDisplay.innerText = (conn && conn.open) ? "iPad 連携OK (Next)" : "iPad未接続 (Next)";
-                }, 3000);
+                    msgDisplay.innerText = "Next Shot OK";
+                }, 15000);
             }
         }
     </script>
