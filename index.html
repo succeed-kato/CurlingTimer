@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro v6 - Stable</title>
+    <title>Curling Pro v7 - Camera Restart</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
@@ -20,8 +20,10 @@
         button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
         #peer-id-display { font-size: 14px; font-weight: bold; background: #333; color: #fff; padding: 8px; border-radius: 4px; }
         
-        /* エラー表示用（デバッグ用） */
-        #error-log { position: absolute; bottom: 0; width: 100%; background: rgba(255,0,0,0.8); font-size: 10px; z-index: 300; display: none; }
+        /* 再起動ボタン用の特別なスタイル */
+        .restart-btn { background: #f44336; } 
+
+        #error-log { position: absolute; bottom: 0; width: 100%; background: rgba(255,0,0,0.8); font-size: 12px; z-index: 300; display: none; padding: 5px; }
     </style>
 </head>
 <body>
@@ -32,6 +34,7 @@
         
         <div class="controls">
             <button onclick="calibrate()">1. 背景セット</button>
+            <button class="restart-btn" onclick="startCamera()">カメラを強制再起動</button>
             <div id="peer-id-display">ID: 準備中...</div>
         </div>
 
@@ -44,7 +47,7 @@
         </div>
     </div>
 
-    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js" onerror="showError('通信ライブラリの読み込みに失敗しました。ネット接続を確認してください')"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
@@ -54,36 +57,48 @@
         const idDisplay = document.getElementById('peer-id-display');
         const errorLog = document.getElementById('error-log');
 
-        function showError(text) {
-            errorLog.innerText = text;
-            errorLog.style.display = "block";
-            console.error(text);
-        }
-
+        let currentStream = null;
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         const zones = {
             start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow" },
             end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan" }
         };
         let draggingZone = null;
-
-        // ID生成
         const myShortId = Math.random().toString(36).substring(2, 8);
 
-        // 1. カメラを先に起動
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => {
+        function showError(text) {
+            errorLog.innerText = text;
+            errorLog.style.display = "block";
+            setTimeout(() => { errorLog.style.display = "none"; }, 5000);
+        }
+
+        // カメラ起動・再起動の関数
+        async function startCamera() {
+            msgDisplay.innerText = "カメラ起動中...";
+            
+            // 既に動いているカメラがあれば止める
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" }, 
+                    audio: false 
+                });
+                currentStream = stream;
                 video.srcObject = stream;
                 msgDisplay.innerText = "背景セット待ち";
                 requestAnimationFrame(analyze);
-                startPeer(); // カメラが成功したら通信を開始
-            })
-            .catch(err => {
-                showError("カメラ起動エラー: " + err.name + ". ブラウザの設定でカメラを許可してください。");
-            });
+                if(!window.peerStarted) startPeer();
+            } catch (err) {
+                showError("カメラ失敗: " + err.message);
+                msgDisplay.innerText = "カメラエラー";
+            }
+        }
 
-        // 2. 通信機能の開始
         function startPeer() {
+            window.peerStarted = true;
             try {
                 const peer = new Peer(myShortId);
                 peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
@@ -93,30 +108,15 @@
                     msgDisplay.innerText = "iPad 連携OK"; 
                 });
             } catch (e) {
-                showError("PeerJS起動失敗: " + e.message);
+                showError("通信機能の起動に失敗");
             }
         }
 
-        // --- (以下、ドラッグや計測のロジックは前回と同じですが、安定化させています) ---
+        // ページ読み込み時にカメラを起動
+        startCamera();
+
+        // --- 計測・ドラッグロジック（安定版） ---
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
-            const touchY = (e.touches[0].clientY - rect.top) / canvas.height;
-            for (let key in zones) {
-                const z = zones[key];
-                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) { draggingZone = z; break; }
-            }
-        });
-        canvas.addEventListener('touchmove', (e) => {
-            if (draggingZone) {
-                const rect = canvas.getBoundingClientRect();
-                draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width - draggingZone.w / 2;
-                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
-            }
-        });
-        canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
-
-        function getAverageColor(zone) {
-            const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
-            const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
-            const data = ctx.getImageData(x, y, 10, 10).
+            const touchY
