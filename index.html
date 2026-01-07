@@ -3,19 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Adjustable Timer</title>
+    <title>Curling Pro - Auto Reset v3</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        .ui { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; }
-        #timer { font-size: 80px; font-weight: bold; text-shadow: 3px 3px 6px #000; color: #0f0; line-height: 1; }
-        #msg { background: rgba(0,0,0,0.6); display: inline-block; padding: 5px 15px; border-radius: 15px; font-size: 14px;}
+        /* タイマー表示を中央に配置し、90度回転させる */
+        #timer-container { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%); /* 画面中央へ */
+            pointer-events: none;
+        }
+        #timer { 
+            font-size: 100px; 
+            font-weight: bold; 
+            text-shadow: 3px 3px 6px #000; 
+            color: #0f0; 
+            display: inline-block;
+            transform: rotate(90deg); /* 【重要】90度回転 */
+        }
+        
+        .ui-top { position: absolute; top: 10px; width: 100%; pointer-events: none; }
+        #msg { background: rgba(0,0,0,0.7); display: inline-block; padding: 5px 15px; border-radius: 15px; font-size: 16px; transform: rotate(90deg); margin-top: 20px;}
         
         .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; gap: 5px;}
-        button { padding: 12px 20px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
+        button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 12px; }
         #peer-id { font-size: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px;}
     </style>
 </head>
@@ -25,14 +41,16 @@
         <canvas id="canvas"></canvas>
         
         <div class="controls">
-            <button id="calibBtn" onclick="calibrate()">1. 背景をセット</button>
+            <button onclick="calibrate()">1. 背景セット</button>
             <div id="peer-id">ID取得中...</div>
-            <div style="font-size: 12px; background: rgba(0,0,0,0.5); padding: 4px;">※枠を指で動かして位置を調整できます</div>
         </div>
 
-        <div class="ui">
-            <div id="msg">枠をハックとホグに合わせてね</div>
+        <div id="timer-container">
             <div id="timer">0.00s</div>
+        </div>
+        
+        <div class="ui-top">
+            <div id="msg">枠をセットしてね</div>
         </div>
     </div>
 
@@ -46,13 +64,13 @@
 
         let startTime = 0;
         let isRunning = false;
+        let isCoolingDown = false; // 連続計測用の待ち時間フラグ
         let baseStartColor = null;
         let baseEndColor = null;
 
-        // 枠の設定 (初期位置)
         const zones = {
-            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow", label: "START (HACK)" },
-            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan",   label: "GOAL (HOG)" }
+            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow", label: "START" },
+            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan",   label: "GOAL" }
         };
 
         let draggingZone = null;
@@ -60,21 +78,15 @@
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
 
-        // --- ドラッグ操作の処理 ---
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
             const touchY = (e.touches[0].clientY - rect.top) / canvas.height;
-
             for (let key in zones) {
                 const z = zones[key];
-                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) {
-                    draggingZone = z;
-                    break;
-                }
+                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) { draggingZone = z; break; }
             }
         });
-
         canvas.addEventListener('touchmove', (e) => {
             if (draggingZone) {
                 const rect = canvas.getBoundingClientRect();
@@ -82,10 +94,8 @@
                 draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
             }
         });
-
         canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
 
-        // --- 計測ロジック ---
         function getAverageColor(zone) {
             const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
             const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
@@ -98,26 +108,21 @@
         function calibrate() {
             baseStartColor = getAverageColor(zones.start);
             baseEndColor = getAverageColor(zones.end);
-            isRunning = false; startTime = 0;
+            isRunning = false; isCoolingDown = false;
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            msgDisplay.innerText = "準備完了！計測できます";
+            msgDisplay.innerText = "準備完了！";
         }
 
         function analyze() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
                 for (let key in zones) {
                     const z = zones[key];
                     ctx.strokeStyle = z.color; ctx.lineWidth = 6;
                     ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
-                    ctx.fillStyle = z.color; ctx.font = "bold 20px sans-serif";
-                    ctx.fillText(z.label, z.x * canvas.width, (z.y > 0.1 ? z.y * canvas.height - 10 : 30));
                 }
-
-                if (baseStartColor !== null) checkMotion();
+                if (baseStartColor !== null && !isCoolingDown) checkMotion();
             }
             if (isRunning) {
                 const elapsed = (Date.now() - startTime) / 1000;
@@ -129,29 +134,34 @@
         function checkMotion() {
             const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
-            const threshold = 35; // ストーンの検知感度
+            const threshold = 35;
 
             if (!isRunning && sDiff > threshold) {
                 startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red"; msgDisplay.innerText = "計測中...";
             }
-            if (isRunning && (Date.now() - startTime > 1000) && eDiff > threshold) {
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > threshold) {
                 isRunning = false;
-                timerDisplay.style.color = "#0f0"; msgDisplay.innerText = "記録更新！";
-                sendToiPad(timerDisplay.innerText);
+                isCoolingDown = true; // 連続計測のクールダウン開始
+                timerDisplay.style.color = "#0f0";
+                const finalTime = timerDisplay.innerText;
+                msgDisplay.innerText = "記録: " + finalTime;
+                sendToiPad(finalTime);
+
+                // --- 3秒後に自動リセットして次の計測へ ---
+                setTimeout(() => {
+                    isCoolingDown = false;
+                    timerDisplay.innerText = "0.00s";
+                    msgDisplay.innerText = "Ready (次の投球OK)";
+                }, 3000);
             }
         }
 
         const peer = new Peer();
-        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPadに入力するID: " + id; });
-        function sendToiPad(val) {
-            if (conn && conn.open) { conn.send(val); }
-        }
         let conn = null;
-        peer.on('connection', (c) => { 
-            conn = c; 
-            msgDisplay.innerText = "iPadと連携しました！";
-        });
+        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPad ID: " + id; });
+        peer.on('connection', (c) => { conn = c; msgDisplay.innerText = "iPad連携完了"; });
+        function sendToiPad(val) { if (conn && conn.open) conn.send(val); }
     </script>
 </body>
 </html>
