@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro Final - Stable ID</title>
+    <title>Curling Pro - Stable Connection</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
@@ -48,17 +48,16 @@
             end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan" }
         };
         let draggingZone = null;
+        let conn = null; // 通信オブジェクト保持用
 
-        // ID生成機能（被りにくい工夫）
-        function generateShortId() {
-            return Math.random().toString(36).substring(2, 8);
-        }
+        // ID生成
+        function generateShortId() { return Math.random().toString(36).substring(2, 8); }
 
         // カメラ起動
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); startPeer(); });
 
-        // 通信機能 (IDが被ったら再試行する)
+        // 通信機能 (何度でも接続を受け入れられるように設定)
         function startPeer() {
             const myId = generateShortId();
             const peer = new Peer(myId);
@@ -68,22 +67,25 @@
                 msgDisplay.innerText = "接続待ち...";
             });
 
-            peer.on('connection', (c) => { 
-                window.conn = c; 
+            // 新しい接続があった時 (iPadがリセットされた時など)
+            peer.on('connection', (newConn) => { 
+                conn = newConn; // 新しい接続を保存
                 msgDisplay.innerText = "iPad 連携OK"; 
-                idDisplay.style.background = "#4CAF50"; // 成功したら緑に
+                idDisplay.style.background = "#4CAF50";
+
+                conn.on('close', () => {
+                    msgDisplay.innerText = "iPad 切断 (再接続待ち)";
+                    idDisplay.style.background = "#f00";
+                    conn = null;
+                });
             });
 
             peer.on('error', (err) => {
-                if(err.type === 'unavailable-id') {
-                    startPeer(); // IDが被ったら別のIDで再開
-                } else {
-                    msgDisplay.innerText = "通信エラー: " + err.type;
-                }
+                if(err.type === 'unavailable-id') startPeer();
             });
         }
 
-        // --- ドラッグ操作 ---
+        // --- ドラッグ操作 (枠の移動) ---
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
@@ -128,18 +130,21 @@
                     ctx.strokeStyle = z.color; ctx.lineWidth = 6;
                     ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
                 }
+                // 背景セットが済んでいれば判定開始
                 if (baseStartColor !== null && !isCoolingDown) checkMotion();
             }
             if (isRunning) {
                 const elapsed = (Date.now() - startTime) / 1000;
                 timerDisplay.innerText = elapsed.toFixed(2) + "s";
             }
+            // 通信エラーがあっても、このループだけは絶対に止めない
             requestAnimationFrame(analyze);
         }
 
         function checkMotion() {
             const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
+            
             if (!isRunning && sDiff > 35) {
                 startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red";
@@ -148,8 +153,22 @@
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
                 const finalTime = timerDisplay.innerText;
-                if (window.conn && window.conn.open) window.conn.send(finalTime);
-                setTimeout(() => { isCoolingDown = false; timerDisplay.innerText = "0.00s"; msgDisplay.innerText = "Next Ready"; }, 3000);
+                
+                // iPadに送信 (失敗してもAndroidの処理は続ける)
+                try {
+                    if (conn && conn.open) {
+                        conn.send(finalTime);
+                    }
+                } catch (e) {
+                    console.log("送信失敗（iPadが接続されていません）");
+                }
+
+                // 3秒後にリセットして次の計測へ
+                setTimeout(() => { 
+                    isCoolingDown = false; 
+                    timerDisplay.innerText = "0.00s"; 
+                    msgDisplay.innerText = (conn && conn.open) ? "iPad 連携OK (Next)" : "iPad未接続 (Next)";
+                }, 3000);
             }
         }
     </script>
