@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - 15s Reset</title>
+    <title>Curling Pro - Reset Button</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -26,7 +26,7 @@
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         <div class="controls">
-            <button onclick="calibrate()">リセット>リセット>りせ>
+            <button onclick="calibrate()">リセット</button>
             <button onclick="location.reload()" style="background:#f44336;">アプリ再起動</button>
             <div id="peer-id-display">ID: 取得中...</div>
         </div>
@@ -51,104 +51,4 @@
         let draggingZone = null;
         let conn = null;
 
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { 
-                video.srcObject = stream; 
-                msgDisplay.innerText = "背景をセットしてください";
-                requestAnimationFrame(analyze); 
-            })
-            .catch(err => { msgDisplay.innerText = "カメラエラー"; });
-
-        function startPeer() {
-            const myId = Math.random().toString(36).substring(2, 8);
-            const peer = new Peer(myId);
-            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
-            peer.on('connection', (newConn) => { 
-                conn = newConn;
-                msgDisplay.innerText = "iPad連携OK"; 
-                idDisplay.style.background = "#4CAF50";
-            });
-            peer.on('error', () => { setTimeout(startPeer, 3000); });
-        }
-        startPeer();
-
-        canvas.addEventListener('touchstart', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
-            const touchY = (e.touches[0].clientY - rect.top) / canvas.height;
-            for (let key in zones) {
-                const z = zones[key];
-                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) { draggingZone = z; break; }
-            }
-        });
-        canvas.addEventListener('touchmove', (e) => {
-            if (draggingZone) {
-                const rect = canvas.getBoundingClientRect();
-                draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width - draggingZone.w / 2;
-                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
-            }
-        });
-        canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
-
-        function getAverageColor(zone) {
-            try {
-                const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
-                const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
-                const data = ctx.getImageData(x, y, 10, 10).data;
-                let r = 0, g = 0, b = 0;
-                for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
-                return (r + g + b) / 300;
-            } catch(e) { return 0; }
-        }
-
-        function calibrate() {
-            baseStartColor = getAverageColor(zones.start);
-            baseEndColor = getAverageColor(zones.end);
-            isRunning = false; isCoolingDown = false;
-            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            msgDisplay.innerText = "Ready!";
-        }
-
-        function analyze() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                for (let key in zones) {
-                    const z = zones[key];
-                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
-                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
-                }
-                if (baseStartColor !== null && !isCoolingDown) checkMotion();
-            }
-            if (isRunning) {
-                timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s";
-            }
-            requestAnimationFrame(analyze);
-        }
-
-        function checkMotion() {
-            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
-            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
-            
-            if (!isRunning && sDiff > 35) {
-                startTime = Date.now(); isRunning = true;
-                timerDisplay.style.color = "red";
-            }
-            if (isRunning && (Date.now() - startTime > 1500) && eDiff > 35) {
-                isRunning = false; isCoolingDown = true;
-                timerDisplay.style.color = "#0f0";
-                const fTime = timerDisplay.innerText;
-                
-                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-
-                // 【ここを15000（15秒）に変更しました】
-                setTimeout(() => { 
-                    isCoolingDown = false; 
-                    timerDisplay.innerText = "0.00s"; 
-                    msgDisplay.innerText = "Next Shot OK";
-                }, 15000);
-            }
-        }
-    </script>
-</body>
-</html>
+        navigator.mediaDevices.getUserMedia({
