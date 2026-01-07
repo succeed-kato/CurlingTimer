@@ -3,23 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Auto Timer Landscape</title>
+    <title>Curling Pro - Adjustable Timer</title>
     <style>
-        /* 横向きレイアウト調整 */
-        body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; }
+        body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
-        /* 映像が横長に収まるように調整 */
         video { width: 100%; height: 100%; object-fit: contain; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; /*pointer-events: none;*/ }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* UI配置の調整 */
-        .ui { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); width: auto; padding: 10px; pointer-events: none; }
+        .ui { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); pointer-events: none; }
         #timer { font-size: 80px; font-weight: bold; text-shadow: 3px 3px 6px #000; color: #0f0; line-height: 1; }
         #msg { background: rgba(0,0,0,0.6); display: inline-block; padding: 5px 15px; border-radius: 15px; font-size: 14px;}
         
-        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 10;}
-        button { padding: 10px 20px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 5px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);}
-        #peer-id { font-size: 10px; margin-top: 5px; background: rgba(0,0,0,0.6); padding: 2px 5px; border-radius: 4px;}
+        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; gap: 5px;}
+        button { padding: 12px 20px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
+        #peer-id { font-size: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px;}
     </style>
 </head>
 <body>
@@ -28,12 +25,13 @@
         <canvas id="canvas"></canvas>
         
         <div class="controls">
-            <button onclick="calibrate()">Set Background (リセット)</button>
+            <button id="calibBtn" onclick="calibrate()">1. 背景をセット</button>
             <div id="peer-id">ID取得中...</div>
+            <div style="font-size: 12px; background: rgba(0,0,0,0.5); padding: 4px;">※枠を指で動かして位置を調整できます</div>
         </div>
 
         <div class="ui">
-            <div id="msg">スマホを横向きにして「Set Background」を押してね</div>
+            <div id="msg">枠をハックとホグに合わせてね</div>
             <div id="timer">0.00s</div>
         </div>
     </div>
@@ -51,7 +49,109 @@
         let baseStartColor = null;
         let baseEndColor = null;
 
-        // 【ここを変更しました】横向き用の枠配置
-        // x, y は左上からの割合(0.0〜1.0), w は幅, h は高さ
-        const startZone = { x: 0.02, y: 0.3, w: 0.15, h: 0.4 }; // 黄色：左側（遠く）
-        const endZone =   { x: 0.83, y: 0.0, w: 0.15, h: 1.0 }; // 青色：右
+        // 枠の設定 (初期位置)
+        const zones = {
+            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow", label: "START (HACK)" },
+            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan",   label: "GOAL (HOG)" }
+        };
+
+        let draggingZone = null;
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
+
+        // --- ドラッグ操作の処理 ---
+        canvas.addEventListener('touchstart', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
+            const touchY = (e.touches[0].clientY - rect.top) / canvas.height;
+
+            for (let key in zones) {
+                const z = zones[key];
+                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) {
+                    draggingZone = z;
+                    break;
+                }
+            }
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (draggingZone) {
+                const rect = canvas.getBoundingClientRect();
+                draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width - draggingZone.w / 2;
+                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
+            }
+        });
+
+        canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
+
+        // --- 計測ロジック ---
+        function getAverageColor(zone) {
+            const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
+            const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
+            const data = ctx.getImageData(x, y, 10, 10).data;
+            let r = 0, g = 0, b = 0;
+            for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
+            return (r + g + b) / (data.length / 4 * 3);
+        }
+
+        function calibrate() {
+            baseStartColor = getAverageColor(zones.start);
+            baseEndColor = getAverageColor(zones.end);
+            isRunning = false; startTime = 0;
+            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
+            msgDisplay.innerText = "準備完了！計測できます";
+        }
+
+        function analyze() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                for (let key in zones) {
+                    const z = zones[key];
+                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
+                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
+                    ctx.fillStyle = z.color; ctx.font = "bold 20px sans-serif";
+                    ctx.fillText(z.label, z.x * canvas.width, (z.y > 0.1 ? z.y * canvas.height - 10 : 30));
+                }
+
+                if (baseStartColor !== null) checkMotion();
+            }
+            if (isRunning) {
+                const elapsed = (Date.now() - startTime) / 1000;
+                timerDisplay.innerText = elapsed.toFixed(2) + "s";
+            }
+            requestAnimationFrame(analyze);
+        }
+
+        function checkMotion() {
+            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
+            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
+            const threshold = 35; // ストーンの検知感度
+
+            if (!isRunning && sDiff > threshold) {
+                startTime = Date.now(); isRunning = true;
+                timerDisplay.style.color = "red"; msgDisplay.innerText = "計測中...";
+            }
+            if (isRunning && (Date.now() - startTime > 1000) && eDiff > threshold) {
+                isRunning = false;
+                timerDisplay.style.color = "#0f0"; msgDisplay.innerText = "記録更新！";
+                sendToiPad(timerDisplay.innerText);
+            }
+        }
+
+        const peer = new Peer();
+        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPadに入力するID: " + id; });
+        function sendToiPad(val) {
+            if (conn && conn.open) { conn.send(val); }
+        }
+        let conn = null;
+        peer.on('connection', (c) => { 
+            conn = c; 
+            msgDisplay.innerText = "iPadと連携しました！";
+        });
+    </script>
+</body>
+</html>
