@@ -1,23 +1,64 @@
-import cv2
-
-# カメラの準備
-cap = cv2.VideoCapture(0)
-
-print("カメラを起動しています... 終了するには画面を閉じるかアプリを止めてください")
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        break
-
-    # 画面の中央に「検知用の四角」を表示してみる（テスト用）
-    height, width, _ = frame.shape
-    cv2.rectangle(frame, (width//4, height//4), (width*3//4, height*3//4), (0, 255, 0), 2)
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Curling Speed Meter</title>
+    <style>
+        body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; }
+        video { width: 100%; height: auto; border-bottom: 2px solid #555; }
+        .ui { padding: 20px; }
+        #timer { font-size: 48px; font-weight: bold; color: #0f0; }
+        button { padding: 15px 30px; font-size: 18px; border-radius: 10px; border: none; background: #2196F3; color: white; }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline></video>
     
-    cv2.imshow('Curling Sensor Test', frame)
+    <div class="ui">
+        <div id="status">カメラ準備中...</div>
+        <div id="timer">0.00s</div>
+        <p>画面をタップすると計測テストができます</p>
+    </div>
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    <script>
+        const video = document.getElementById('video');
+        const timerDisplay = document.getElementById('timer');
+        let startTime = 0;
+        let isRunning = false;
 
-cap.release()
-cv2.destroyAllWindows()
+        // スマホの背面カメラを起動する設定
+        navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" }, 
+            audio: false 
+        })
+        .then(stream => {
+            video.srcObject = stream;
+            document.getElementById('status').innerText = "カメラ稼働中";
+        })
+        .catch(err => {
+            document.getElementById('status').innerText = "エラー: カメラが見つかりません";
+        });
+
+        // 画面タップでタイマーを動かす（テスト用）
+        window.addEventListener('touchstart', () => {
+            if (!isRunning) {
+                startTime = Date.now();
+                isRunning = true;
+                timerDisplay.style.color = "#f00"; // 計測中は赤色
+                updateTimer();
+            } else {
+                isRunning = false;
+                timerDisplay.style.color = "#0f0"; // 停止したら緑色
+            }
+        });
+
+        function updateTimer() {
+            if (!isRunning) return;
+            const elapsed = (Date.now() - startTime) / 1000;
+            timerDisplay.innerText = elapsed.toFixed(2) + "s";
+            requestAnimationFrame(updateTimer);
+        }
+    </script>
+</body>
+</html>
