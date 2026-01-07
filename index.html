@@ -3,19 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - 15s Reset</title>
+    <title>Curling Pro - 15s Reset with iPad Sync</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
-        
         .ui-msg-container { position: absolute; top: 20px; width: 100%; pointer-events: none; }
         #msg { background: rgba(0,0,0,0.7); display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 18px; transform: rotate(-90deg); }
-        
         .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 8px;}
         button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
         #peer-id-display { font-size: 14px; font-weight: bold; background: #333; color: #fff; padding: 8px; border-radius: 4px; }
@@ -26,7 +23,7 @@
         <video id="video" autoplay playsinline></video>
         <canvas id="canvas"></canvas>
         <div class="controls">
-            <button onclick="calibrate()">1. 背景セット</button>
+            <button onclick="calibrate()">リセット</button>
             <button onclick="location.reload()" style="background:#f44336;">アプリ再起動</button>
             <div id="peer-id-display">ID: 取得中...</div>
         </div>
@@ -54,7 +51,7 @@
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { 
                 video.srcObject = stream; 
-                msgDisplay.innerText = "背景をセットしてください";
+                msgDisplay.innerText = "リセットを押してください";
                 requestAnimationFrame(analyze); 
             })
             .catch(err => { msgDisplay.innerText = "カメラエラー"; });
@@ -141,11 +138,12 @@
                 
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
 
-                // 【ここを15000（15秒）に変更しました】
                 setTimeout(() => { 
                     isCoolingDown = false; 
                     timerDisplay.innerText = "0.00s"; 
                     msgDisplay.innerText = "Next Shot OK";
+                    // 【追加】15秒経ったらiPadにOK信号を送る
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
                 }, 15000);
             }
         }
