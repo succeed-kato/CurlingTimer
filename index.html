@@ -3,36 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Auto Reset v3</title>
+    <title>Curling Pro v5 - Flipped Display</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #000; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* タイマー表示を中央に配置し、90度回転させる */
+        /* タイマーを画面中央に配置し、-90度回転させる */
         #timer-container { 
             position: absolute; 
             top: 50%; 
             left: 50%; 
-            transform: translate(-50%, -50%); /* 画面中央へ */
+            transform: translate(-50%, -50%);
             pointer-events: none;
+            z-index: 100;
         }
         #timer { 
-            font-size: 100px; 
+            font-size: 120px; 
             font-weight: bold; 
-            text-shadow: 3px 3px 6px #000; 
+            text-shadow: 4px 4px 8px #000; 
             color: #0f0; 
             display: inline-block;
-            transform: rotate(90deg); /* 【重要】90度回転 */
+            transform: rotate(-90deg); /* 【ここを-90度に変更しました】 */
+            white-space: nowrap;
         }
         
-        .ui-top { position: absolute; top: 10px; width: 100%; pointer-events: none; }
-        #msg { background: rgba(0,0,0,0.7); display: inline-block; padding: 5px 15px; border-radius: 15px; font-size: 16px; transform: rotate(90deg); margin-top: 20px;}
+        .ui-msg-container { position: absolute; top: 20px; width: 100%; pointer-events: none; }
+        #msg { background: rgba(0,0,0,0.7); display: inline-block; padding: 8px 20px; border-radius: 20px; font-size: 18px; transform: rotate(-90deg); }
         
-        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 10; display: flex; flex-direction: column; gap: 5px;}
-        button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 12px; }
-        #peer-id { font-size: 10px; background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px;}
+        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 8px;}
+        button { padding: 12px 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; }
+        #peer-id-display { font-size: 16px; font-weight: bold; background: #f00; color: #fff; padding: 8px; border-radius: 4px; box-shadow: 0 0 10px rgba(255,0,0,0.5);}
     </style>
 </head>
 <body>
@@ -42,15 +44,15 @@
         
         <div class="controls">
             <button onclick="calibrate()">1. 背景セット</button>
-            <div id="peer-id">ID取得中...</div>
+            <div id="peer-id-display">ID: 発行中...</div>
         </div>
 
         <div id="timer-container">
             <div id="timer">0.00s</div>
         </div>
         
-        <div class="ui-top">
-            <div id="msg">枠をセットしてね</div>
+        <div class="ui-msg-container">
+            <div id="msg">準備中</div>
         </div>
     </div>
 
@@ -61,10 +63,11 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const timerDisplay = document.getElementById('timer');
         const msgDisplay = document.getElementById('msg');
+        const idDisplay = document.getElementById('peer-id-display');
 
         let startTime = 0;
         let isRunning = false;
-        let isCoolingDown = false; // 連続計測用の待ち時間フラグ
+        let isCoolingDown = false;
         let baseStartColor = null;
         let baseEndColor = null;
 
@@ -74,6 +77,14 @@
         };
 
         let draggingZone = null;
+
+        function generateShortId(length) {
+            let result = '';
+            const characters = 'abcdefghjkmnpqrstuvwxyz23456789';
+            for (let i = 0; i < length; i++) { result += characters.charAt(Math.floor(Math.random() * characters.length)); }
+            return result;
+        }
+        const myShortId = generateShortId(6);
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); });
@@ -106,62 +117,4 @@
         }
 
         function calibrate() {
-            baseStartColor = getAverageColor(zones.start);
-            baseEndColor = getAverageColor(zones.end);
-            isRunning = false; isCoolingDown = false;
-            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            msgDisplay.innerText = "準備完了！";
-        }
-
-        function analyze() {
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                for (let key in zones) {
-                    const z = zones[key];
-                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
-                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
-                }
-                if (baseStartColor !== null && !isCoolingDown) checkMotion();
-            }
-            if (isRunning) {
-                const elapsed = (Date.now() - startTime) / 1000;
-                timerDisplay.innerText = elapsed.toFixed(2) + "s";
-            }
-            requestAnimationFrame(analyze);
-        }
-
-        function checkMotion() {
-            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
-            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
-            const threshold = 35;
-
-            if (!isRunning && sDiff > threshold) {
-                startTime = Date.now(); isRunning = true;
-                timerDisplay.style.color = "red"; msgDisplay.innerText = "計測中...";
-            }
-            if (isRunning && (Date.now() - startTime > 1500) && eDiff > threshold) {
-                isRunning = false;
-                isCoolingDown = true; // 連続計測のクールダウン開始
-                timerDisplay.style.color = "#0f0";
-                const finalTime = timerDisplay.innerText;
-                msgDisplay.innerText = "記録: " + finalTime;
-                sendToiPad(finalTime);
-
-                // --- 3秒後に自動リセットして次の計測へ ---
-                setTimeout(() => {
-                    isCoolingDown = false;
-                    timerDisplay.innerText = "0.00s";
-                    msgDisplay.innerText = "Ready (次の投球OK)";
-                }, 3000);
-            }
-        }
-
-        const peer = new Peer();
-        let conn = null;
-        peer.on('open', id => { document.getElementById('peer-id').innerText = "iPad ID: " + id; });
-        peer.on('connection', (c) => { conn = c; msgDisplay.innerText = "iPad連携完了"; });
-        function sendToiPad(val) { if (conn && conn.open) conn.send(val); }
-    </script>
-</body>
-</html>
+            baseStartColor = get
