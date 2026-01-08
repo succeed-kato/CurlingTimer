@@ -3,63 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Pro - Safe Layout</title>
+    <title>Curling Pro - Vertical Ultra</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
         video { width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; touch-action: none; }
         
-        /* タイマー：中央より少し下 */
-        #timer-container { position: absolute; top: 55%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
+        /* タイマー：中央 */
+        #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        /* 上部コントロールエリア：ここにID表示もまとめました */
+        /* 【改善】上部コントロール：さらに上端へ (top: 5px) */
         .top-controls { 
             position: absolute; 
-            top: 20px; 
+            top: 5px; 
             left: 0; 
             width: 100%; 
             display: flex; 
             flex-direction: column; 
             align-items: center; 
-            gap: 15px; 
+            gap: 8px; 
             z-index: 9999; 
             pointer-events: auto; 
         }
         .btn-reset { 
-            width: 80%; padding: 20px; background: #2196F3; color: #fff; 
-            border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 24px; 
-            box-shadow: 0 6px 15px rgba(0,0,0,0.5);
+            width: 85%; padding: 18px; background: #2196F3; color: #fff; 
+            border: 3px solid #fff; border-radius: 12px; font-weight: bold; font-size: 22px; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
         }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
 
-        /* 【重要】ID表示を上部に移動。ここなら絶対に見えます */
         #peer-id-display { 
-            width: 70%;
-            font-size: 16px; font-weight: bold; 
-            background: rgba(68, 68, 68, 0.9); color: #fff; 
-            padding: 10px; border-radius: 15px; 
-            border: 2px solid #666;
+            width: 75%; font-size: 14px; font-weight: bold; 
+            background: rgba(50, 50, 50, 0.9); color: #fff; 
+            padding: 8px; border-radius: 12px; border: 1px solid #666;
         }
 
-        /* 感度スライダー：右側ギリギリ */
+        /* 【改善】感度スライダー：さらに右端ギリギリへ (right: -85px) */
         .side-controls { 
-            position: absolute; right: -75px; top: 55%; transform: translateY(-50%) rotate(-90deg); 
+            position: absolute; right: -85px; top: 55%; transform: translateY(-50%) rotate(-90deg); 
             display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
-            background: rgba(51, 51, 51, 0.7); padding: 5px 20px; border-radius: 10px;
+            background: rgba(51, 51, 51, 0.6); padding: 5px 20px; border-radius: 8px;
         }
-        input[type=range] { width: 160px; height: 40px; }
+        input[type=range] { width: 180px; height: 40px; }
         #threshold-value { font-size: 16px; font-weight: bold; color: #2196F3; width: 30px; transform: rotate(90deg); text-align: center; }
         
-        #status-log { position: absolute; top: 5px; right: 10px; font-size: 10px; color: #666; z-index: 1000; }
+        #status-log { position: absolute; top: 5px; right: 5px; font-size: 9px; color: #555; z-index: 1000; }
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="start-overlay">
-        <h2 style="margin-bottom:30px;">カニバター・タイマー</h2>
+        <h2 style="margin-bottom:20px;">カニバター・タイマー</h2>
         <button class="btn-start" onclick="startApp()">アプリを起動する</button>
     </div>
 
@@ -74,15 +71,13 @@
         </div>
 
         <div class="side-controls">
-            <div style="font-size:12px; color:#aaa;">感度</div>
+            <div style="font-size:11px; color:#aaa;">感度</div>
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
             <div id="threshold-value">25</div>
         </div>
 
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
-
-    
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -125,24 +120,24 @@
         }
 
         function initPeer() {
-            updateLog("Connecting to Server...");
+            updateLog("Connecting...");
             idDisplay.innerText = "ID: 取得中...";
             if (peer) { peer.destroy(); }
             const myId = Math.random().toString(36).substring(2, 8);
             peer = new Peer(myId);
             peer.on('open', id => { 
                 idDisplay.innerText = "iPad ID: " + id; 
-                idDisplay.style.background = "rgba(68, 68, 68, 0.9)";
-                updateLog("ID Ready"); 
+                idDisplay.style.background = "rgba(50, 50, 50, 0.9)";
+                updateLog("Ready"); 
             });
             peer.on('connection', (newConn) => { 
                 conn = newConn; 
                 idDisplay.style.background = "#4CAF50"; 
                 updateLog("Connected");
             });
-            peer.on('error', (err) => { 
+            peer.on('error', () => { 
                 updateLog("Peer Error");
-                idDisplay.innerText = "ID取得失敗 (タップで再試行)";
+                idDisplay.innerText = "失敗 (タップで再試行)";
                 idDisplay.style.background = "#d32f2f";
             });
         }
