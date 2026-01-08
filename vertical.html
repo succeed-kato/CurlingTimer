@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Pro - Vertical Rescue</title>
+    <title>Curling Pro - Android Final</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -15,18 +15,27 @@
         
         .controls { position: absolute; top: 10px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; z-index: 9999; pointer-events: auto; }
         .btn-reset { width: 80%; padding: 20px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; }
-        .btn-reset:active { background: #0D47A1; }
+        
+        /* 起動ボタン：これが出たら押してください */
+        #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; }
 
         .slider-box { width: 80%; background: rgba(51, 51, 51, 0.9); padding: 10px; border-radius: 12px; font-size: 14px; }
         input[type=range] { width: 100%; height: 35px; }
         
         #peer-id-display { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 16px; font-weight: bold; background: #444; color: #fff; padding: 12px 25px; border-radius: 30px; z-index: 9999; border: 2px solid #666; }
-        #status-log { position: absolute; bottom: 5px; right: 10px; font-size: 10px; color: #666; z-index: 1000; }
+        #status-log { position: absolute; bottom: 5px; right: 10px; font-size: 10px; color: #888; z-index: 1000; }
     </style>
 </head>
 <body>
+    <div id="start-overlay">
+        <p>カニバター・タイマー（縦）</p>
+        <button class="btn-start" onclick="startApp()">アプリを起動する</button>
+        <p style="font-size: 12px; margin-top: 20px; color: #aaa;">※カメラと通信の許可が必要です</p>
+    </div>
+
     <div id="container">
-        <div id="status-log">Initializing...</div>
+        <div id="status-log">Status: Waiting for user...</div>
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
         
@@ -39,11 +48,9 @@
             </div>
         </div>
 
-        <div id="peer-id-display">ID: 準備中...</div>
+        <div id="peer-id-display">ID: 停止中</div>
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
-
-    [Image of a smartphone in a vertical tripod mount showing a sensor interface]
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -54,66 +61,72 @@
         const idDisplay = document.getElementById('peer-id-display');
         const threshValDisp = document.getElementById('threshold-value');
         const statusLog = document.getElementById('status-log');
+        const startOverlay = document.getElementById('start-overlay');
 
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         let currentThreshold = 25;
         let conn = null;
 
-        // 縦向き：下がスタート、上がゴール
         const zones = {
             start: { x: 0.2, y: 0.7, w: 0.6, h: 0.1, color: "yellow" },
             end:   { x: 0.2, y: 0.2, w: 0.6, h: 0.1, color: "cyan" }
         };
         let draggingZone = null;
 
-        function updateLog(msg) { statusLog.innerText = "System: " + msg; }
+        function updateLog(msg) { statusLog.innerText = "Status: " + msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = "設定: " + val; }
 
-        // --- カメラ起動：解像度指定を外して安定性重視 ---
+        // --- 起動のトリガー ---
+        function startApp() {
+            startOverlay.style.display = 'none';
+            initCamera();
+            initPeer();
+        }
+
         async function initCamera() {
-            updateLog("Camera booting...");
+            updateLog("Camera requested...");
             try {
+                // Android Chromeで最も通りやすい最小限の設定
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" }, // 向き指定を外してブラウザに任せる
+                    video: { facingMode: "environment" },
                     audio: false 
                 });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    updateLog("Camera OK");
+                // 明示的に再生を開始
+                video.play().then(() => {
+                    updateLog("Camera Active");
                     requestAnimationFrame(analyze);
-                };
+                });
             } catch (err) {
                 updateLog("Camera Error: " + err.name);
+                // 失敗した場合、解像度なしで再試行
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    video.srcObject = stream;
+                    video.play();
+                } catch(e) { updateLog("All Camera attempts failed"); }
             }
         }
 
-        // --- ID発行：カメラとは完全に別系統で動かす ---
         function initPeer() {
-            updateLog("ID issuing...");
+            updateLog("Initializing Peer...");
             try {
                 const myId = Math.random().toString(36).substring(2, 8);
                 const peer = new Peer(myId);
                 peer.on('open', id => { 
                     idDisplay.innerText = "iPad ID: " + id; 
-                    updateLog("System Ready");
+                    updateLog("ID Issued");
                 });
                 peer.on('connection', (newConn) => { 
                     conn = newConn; 
                     idDisplay.style.background = "#4CAF50"; 
-                    updateLog("iPad Connected");
+                    updateLog("Connected");
                 });
-                peer.on('error', (err) => {
-                    if(err.type === 'unavailable-id') setTimeout(initPeer, 1000);
-                    else updateLog("Peer Error");
-                });
-            } catch (e) { updateLog("Peer Load Failed"); }
+                peer.on('error', (err) => { updateLog("Peer Error: " + err.type); });
+            } catch (e) { updateLog("PeerJS Error"); }
         }
 
-        // 実行
-        initCamera();
-        setTimeout(initPeer, 1000);
-
-        // タッチ操作（縦向き最適化）
+        // タッチ操作
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
@@ -121,9 +134,7 @@
             const touchY = (e.touches[0].clientY - rect.top) / rect.height;
             for (let key in zones) {
                 const z = zones[key];
-                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.05 && touchY < z.y + z.h + 0.05) { 
-                    draggingZone = z; break; 
-                }
+                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.1 && touchY < z.y + z.h + 0.1) { draggingZone = z; break; }
             }
         }, { passive: false });
 
@@ -139,4 +150,56 @@
         canvas.addEventListener('touchend', () => { draggingZone = null; });
 
         function getAverageColor(zone) {
-            const px =
+            const px = Math.floor((zone.x + zone.w/2) * canvas.width);
+            const py = Math.floor((zone.y + zone.h/2) * canvas.height);
+            try {
+                const data = ctx.getImageData(px-5, py-5, 10, 10).data;
+                let sum = 0; for(let i=0; i<data.length; i+=4) { sum += (data[i]+data[i+1]+data[i+2])/3; }
+                return sum / 100;
+            } catch(e) { return 0; }
+        }
+
+        function calibrate() {
+            baseStartColor = getAverageColor(zones.start);
+            baseEndColor = getAverageColor(zones.end);
+            isRunning = false; isCoolingDown = false;
+            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
+            updateLog("Ready");
+        }
+
+        function analyze() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                for (let key in zones) {
+                    const z = zones[key];
+                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
+                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
+                }
+                if (baseStartColor !== null && !isCoolingDown) checkMotion();
+            }
+            if (isRunning) { timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s"; }
+            requestAnimationFrame(analyze);
+        }
+
+        function checkMotion() {
+            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
+            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
+            if (!isRunning && sDiff > currentThreshold) {
+                startTime = Date.now(); isRunning = true;
+                timerDisplay.style.color = "red";
+            }
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
+                isRunning = false; isCoolingDown = true;
+                timerDisplay.style.color = "#0f0";
+                const fTime = timerDisplay.innerText;
+                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
+                setTimeout(() => { 
+                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
