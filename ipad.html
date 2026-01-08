@@ -7,28 +7,41 @@
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; text-align: center; overflow: hidden; }
         #container { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        
+        /* 接続前入力画面 */
         #setup { display: flex; flex-direction: column; gap: 20px; }
         input { font-size: 40px; padding: 10px; width: 300px; text-align: center; border-radius: 10px; border: none; }
         button { font-size: 30px; padding: 15px 40px; background: #4CAF50; color: white; border: none; border-radius: 15px; font-weight: bold; }
+        
+        /* タイム・OK表示画面 */
         #display { display: none; width: 100%; }
         #time-label { font-size: 5vw; color: #aaa; margin-bottom: 10px; }
-        #time-value { font-size: 25vw; font-weight: bold; color: #0f0; text-shadow: 0 0 20px #0f0; }
+        #time-value { 
+            font-size: 25vw; font-weight: bold; color: #0f0; 
+            text-shadow: 0 0 20px rgba(0, 255, 0, 0.7); 
+            transition: all 0.3s;
+        }
+        
         #status { position: absolute; top: 20px; font-size: 20px; color: #666; }
     </style>
 </head>
 <body>
     <div id="container">
         <div id="status">Ready to connect...</div>
+
         <div id="setup">
             <h1 style="font-size: 40px;">AndroidのIDを入力</h1>
             <input type="text" id="peer-id-input" placeholder="6文字のID">
             <button onclick="connectToAndroid()">連携スタート</button>
         </div>
+
         <div id="display">
-            <div id="time-label">BACK TO HOG</div>
+            <div id="time-label">STATUS</div>
             <div id="time-value">0.00s</div>
         </div>
     </div>
+
+    
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -38,32 +51,50 @@
         const setupDiv = document.getElementById('setup');
         const displayDiv = document.getElementById('display');
         const timeValue = document.getElementById('time-value');
+        const timeLabel = document.getElementById('time-label');
 
         function connectToAndroid() {
             const targetId = document.getElementById('peer-id-input').value;
             if (!targetId) return alert("IDを入力してください");
-            statusDisp.innerText = "Connecting...";
+
+            statusDisp.innerText = "Connecting to " + targetId + "...";
             peer = new Peer();
+
             peer.on('open', () => {
                 conn = peer.connect(targetId);
+
                 conn.on('open', () => {
                     statusDisp.innerText = "CONNECTED";
                     statusDisp.style.color = "#4CAF50";
                     setupDiv.style.display = "none";
                     displayDiv.style.display = "block";
                 });
+
+                // 受信処理
                 conn.on('data', (data) => {
                     if (data === "RESET_OK") {
-                        timeValue.innerText = "0.00s";
+                        // 【ここを修正！】10秒後の信号で「OK」を表示
+                        timeValue.innerText = "OK";
+                        timeLabel.innerText = "READY";
                     } else {
+                        // タイムを受信した場合
                         timeValue.innerText = data;
+                        timeLabel.innerText = "BACK TO HOG";
                     }
-                    // どんなデータを受信しても色は常に緑色（#0f0）
+                    // 色は常に鮮やかな緑色
                     timeValue.style.color = "#0f0";
                 });
-                conn.on('close', () => { location.reload(); });
+
+                conn.on('close', () => {
+                    alert("通信が切断されました。");
+                    location.reload();
+                });
             });
-            peer.on('error', (err) => { alert("接続に失敗しました"); });
+
+            peer.on('error', (err) => {
+                alert("接続に失敗しました。");
+                statusDisp.innerText = "Error";
+            });
         }
     </script>
 </body>
