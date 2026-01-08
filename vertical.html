@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Pro - Edge Edition</title>
+    <title>Curling Pro - Slim Zones</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -38,10 +38,10 @@
             padding: 8px; border-radius: 12px; border: 1px solid #666;
         }
 
-        /* 【極限調整】さらに右端へ追い込み、バーをスリムに */
+        /* 感度スライダー：ご自身で見つけた -130px を採用！ */
         .side-controls { 
             position: absolute; 
-            right: -130px; /* さらに外側へ (-85pxから-130pxへ) */
+            right: -130px; 
             top: 50%; 
             transform: translateY(-50%) rotate(-90deg); 
             display: flex; 
@@ -49,7 +49,7 @@
             gap: 10px; 
             z-index: 9999; 
             pointer-events: auto; 
-            background: rgba(51, 51, 51, 0.4); /* 透明度を上げてより目立たなく */
+            background: rgba(51, 51, 51, 0.4); 
             padding: 2px 20px; 
             border-radius: 5px;
         }
@@ -63,7 +63,7 @@
 </head>
 <body>
     <div id="start-overlay">
-        <h2 style="margin-bottom:20px;">カニバター・タイマー</h2>
+        <h2 style="margin-bottom:20px;">カーリング・タイマー</h2>
         <button class="btn-start" onclick="startApp()">アプリを起動する</button>
     </div>
 
@@ -101,9 +101,10 @@
         let currentThreshold = 25;
         let conn = null, peer = null;
 
+        // 【修正点】h: 0.08 から 0.05 に小さくしました
         const zones = {
-            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.08, color: "yellow" },
-            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.08, color: "cyan" }
+            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
+            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
         };
         let draggingZone = null;
 
@@ -156,6 +157,7 @@
             const touchY = (e.touches[0].clientY - rect.top) / rect.height;
             for (let key in zones) {
                 const z = zones[key];
+                // 掴み判定は少し広めに維持
                 if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { 
                     draggingZone = z; break; 
                 }
@@ -219,10 +221,4 @@
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
                 setTimeout(() => { 
                     isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
-                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
-                }, 10000);
-            }
-        }
-    </script>
-</body>
-</html>
+                    try {
