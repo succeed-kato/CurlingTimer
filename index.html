@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Timer - Fixed Landscape</title>
+    <title>Curling Timer - Landscape</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -23,7 +23,6 @@
         #peer-id-display { font-size: 13px; font-weight: bold; background: #444; color: #fff; padding: 10px; border-radius: 6px; }
         #status-log { position: absolute; bottom: 10px; right: 10px; font-size: 10px; color: #888; z-index: 1000; }
 
-        /* 起動画面：画面全体をタップ可能に */
         #start-overlay { 
             position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.95); z-index: 10000; 
@@ -31,15 +30,14 @@
             cursor: pointer;
         }
         .start-msg { transform: rotate(-90deg); }
-        .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+        .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="start-overlay" onclick="startApp()">
         <div class="start-msg">
             <h2 style="margin-bottom:40px;">カーリング・タイマー</h2>
-            <button class="btn-start">タップして起動</button>
-            <p>画面のどこかを触ってください</p>
+            <button class="btn-start">アプリを起動する</button>
         </div>
     </div>
 
@@ -58,8 +56,6 @@
         </div>
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
-
-    
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -85,58 +81,31 @@
         function updateLog(msg) { statusLog.innerText = "Status: " + msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
 
-        // --- 起動トリガー ---
         function startApp() {
-            // ボタンが押されたら即座にログを出し、オーバーレイを消す
-            updateLog("Starting...");
             startOverlay.style.display = 'none';
-            
-            // 通信とカメラを個別に開始（一方が止まっても他方が動くように）
             initPeer();
             initCamera();
         }
 
         async function initCamera() {
-            updateLog("Camera requested...");
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: "environment" }, 
-                    audio: false 
-                });
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
                 video.srcObject = stream;
-                // play()を待つことで確実に映像を出す
                 await video.play();
                 updateLog("Camera Active");
                 requestAnimationFrame(analyze);
-            } catch (err) { 
-                updateLog("Camera Error: " + err.name);
-                alert("カメラの起動に失敗しました。サイト設定で許可を確認してください。");
-            }
+            } catch (err) { updateLog("Camera Error"); }
         }
 
         function initPeer() {
-            updateLog("Initializing Peer...");
             idDisplay.innerText = "ID: 取得中...";
             if (peer) { peer.destroy(); }
             const myId = Math.random().toString(36).substring(2, 8);
             peer = new Peer(myId);
-            
-            peer.on('open', id => { 
-                idDisplay.innerText = "iPad ID: " + id; 
-                updateLog("ID Issued"); 
-            });
-            peer.on('connection', (newConn) => { 
-                conn = newConn; 
-                idDisplay.style.background = "#4CAF50"; 
-                updateLog("Connected");
-            });
-            peer.on('error', (err) => { 
-                updateLog("Peer Error: " + err.type);
-                idDisplay.innerText = "失敗 (タップで再試行)";
-            });
+            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; updateLog("ID Ready"); });
+            peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
         }
 
-        // タッチ操作（枠の移動）
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
@@ -144,9 +113,7 @@
             const touchY = (e.touches[0].clientY - rect.top) / rect.height;
             for (let key in zones) {
                 const z = zones[key];
-                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.1 && touchY < z.y + z.h + 0.1) { 
-                    draggingZone = z; break; 
-                }
+                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.1 && touchY < z.y + z.h + 0.1) { draggingZone = z; break; }
             }
         }, { passive: false });
 
@@ -166,8 +133,7 @@
             const py = Math.floor((zone.y + zone.h/2) * canvas.height);
             try {
                 const data = ctx.getImageData(px-5, py-5, 10, 10).data;
-                let sum = 0; 
-                for(let i=0; i<data.length; i+=4) { sum += (data[i] + data[i+1] + data[i+2]) / 3; }
+                let sum = 0; for(let i=0; i<data.length; i+=4) { sum += (data[i] + data[i+1] + data[i+2]) / 3; }
                 return sum / 100;
             } catch(e) { return 0; }
         }
@@ -177,7 +143,6 @@
             baseEndColor = getAverageColor(zones.end);
             isRunning = false; isCoolingDown = false;
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            updateLog("Ready");
         }
 
         function analyze() {
@@ -207,10 +172,7 @@
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-                setTimeout(() => { 
-                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
-                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
-                }, 10000);
+                setTimeout(() => { isCoolingDown = false; timerDisplay.innerText = "0.00s"; try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} }, 10000);
             }
         }
     </script>
