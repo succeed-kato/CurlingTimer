@@ -3,31 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Stable Simple</title>
+    <title>Curling Pro - Ultra Stable</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #111; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #222; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
         
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 140px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
         
-        .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 15px; z-index: 9999; pointer-events: auto; }
-        .btn-reset { padding: 22px 32px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; box-shadow: 0 6px 15px rgba(0,0,0,0.5); }
-        .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
+        .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; pointer-events: auto; }
+        .btn-reset { padding: 20px 30px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; }
+        .btn-reset:active { background: #0D47A1; }
 
-        .slider-box { background: rgba(51, 51, 51, 0.9); padding: 10px; border-radius: 10px; font-size: 14px; text-align: center; }
+        .slider-box { background: rgba(51, 51, 51, 0.9); padding: 8px; border-radius: 10px; font-size: 14px; }
         input[type=range] { width: 130px; height: 35px; }
-        #peer-id-display { font-size: 13px; font-weight: bold; background: #444; color: #fff; padding: 8px; border-radius: 6px; }
-        #status-log { position: absolute; bottom: 10px; right: 10px; font-size: 10px; color: #444; z-index: 1000; }
+        
+        #peer-id-display { font-size: 13px; font-weight: bold; background: #444; color: #fff; padding: 6px; border-radius: 5px; }
+        
+        /* 診断用ログ表示 */
+        #status-log { position: absolute; bottom: 10px; right: 10px; font-size: 10px; color: #aaa; z-index: 1000; text-align: right; pointer-events: none; }
     </style>
 </head>
 <body>
     <div id="container">
-        <div id="status-log">System: Ready</div>
+        <div id="status-log">System: Initializing...</div>
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
+        
         <div class="controls">
             <button class="btn-reset" onclick="calibrate()">リセット</button>
             <div class="slider-box">
@@ -36,7 +40,9 @@
                 <div id="threshold-value">設定: 25</div>
             </div>
             <div id="peer-id-display">ID: 準備中...</div>
+            <button onclick="location.reload()" style="font-size:10px; background:#333; color:#888; border:none; padding:5px;">再読込</button>
         </div>
+
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
 
@@ -60,37 +66,60 @@
         };
         let draggingZone = null;
 
-        function updateLog(msg) { statusLog.innerText = "System: " + msg; }
+        function updateLog(msg) { statusLog.innerText = "System: " + msg; console.log(msg); }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = "設定: " + val; }
 
-        // カメラ起動を最優先
+        // --- 1. カメラ起動 (最優先) ---
         async function initCamera() {
+            updateLog("Camera starting...");
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, 
                     audio: false 
                 });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => { requestAnimationFrame(analyze); };
-            } catch (err) { updateLog("Camera Error"); }
+                video.onloadedmetadata = () => {
+                    updateLog("Camera OK");
+                    requestAnimationFrame(analyze);
+                };
+            } catch (err) {
+                updateLog("Camera Error: " + err.name);
+                alert("カメラが起動できません。ブラウザの設定で許可してください。");
+            }
         }
 
-        // 通信機能を少し遅らせて起動
+        // --- 2. 通信機能 (カメラとは別に起動) ---
         function initPeer() {
+            if (typeof Peer === 'undefined') {
+                updateLog("PeerJS Library not loaded");
+                return;
+            }
+            updateLog("ID issuing...");
             const myId = Math.random().toString(36).substring(2, 8);
             const peer = new Peer(myId);
-            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
+
+            peer.on('open', id => { 
+                idDisplay.innerText = "iPad ID: " + id; 
+                updateLog("ID OK: " + id);
+            });
+
             peer.on('connection', (newConn) => { 
                 conn = newConn; 
                 idDisplay.style.background = "#4CAF50"; 
-                updateLog("Connected");
+                updateLog("iPad Connected");
             });
-            peer.on('error', (err) => { if(err.type === 'unavailable-id') setTimeout(initPeer, 1000); });
+
+            peer.on('error', (err) => {
+                updateLog("Peer Error: " + err.type);
+                if(err.type === 'unavailable-id') setTimeout(initPeer, 1000);
+            });
         }
 
+        // 起動開始
         initCamera();
-        setTimeout(initPeer, 1500);
+        setTimeout(initPeer, 1000); // カメラの負荷を避けるため1秒ずらして通信開始
 
+        // 枠の移動ロジック
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
@@ -114,12 +143,52 @@
             const py = Math.floor((zone.y + zone.h/2) * canvas.height);
             try {
                 const data = ctx.getImageData(px-5, py-5, 10, 10).data;
-                let sum = 0; 
-                for(let i=0; i<data.length; i+=4) { 
-                    sum += (data[i] + data[i+1] + data[i+2]) / 3; 
-                }
+                let sum = 0; for(let i=0; i<data.length; i+=4) { sum += (data[i]+data[i+1]+data[i+2])/3; }
                 return sum / 100;
             } catch(e) { return 0; }
         }
 
         function calibrate() {
+            baseStartColor = getAverageColor(zones.start);
+            baseEndColor = getAverageColor(zones.end);
+            isRunning = false; isCoolingDown = false;
+            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
+            updateLog("Calibrated");
+        }
+
+        function analyze() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                for (let key in zones) {
+                    const z = zones[key];
+                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
+                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
+                }
+                if (baseStartColor !== null && !isCoolingDown) checkMotion();
+            }
+            if (isRunning) { timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s"; }
+            requestAnimationFrame(analyze);
+        }
+
+        function checkMotion() {
+            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
+            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
+            if (!isRunning && sDiff > currentThreshold) {
+                startTime = Date.now(); isRunning = true;
+                timerDisplay.style.color = "red";
+            }
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
+                isRunning = false; isCoolingDown = true;
+                timerDisplay.style.color = "#0f0";
+                const fTime = timerDisplay.innerText;
+                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
+                setTimeout(() => { 
+                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
