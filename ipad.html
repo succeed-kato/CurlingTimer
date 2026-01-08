@@ -7,38 +7,28 @@
     <style>
         body { margin: 0; background: #000; color: #fff; font-family: sans-serif; text-align: center; overflow: hidden; }
         #container { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        
-        /* 接続前入力画面 */
         #setup { display: flex; flex-direction: column; gap: 20px; }
         input { font-size: 40px; padding: 10px; width: 300px; text-align: center; border-radius: 10px; border: none; }
         button { font-size: 30px; padding: 15px 40px; background: #4CAF50; color: white; border: none; border-radius: 15px; font-weight: bold; }
-        
-        /* タイム表示画面 */
         #display { display: none; width: 100%; }
         #time-label { font-size: 5vw; color: #aaa; margin-bottom: 10px; }
         #time-value { font-size: 25vw; font-weight: bold; color: #0f0; text-shadow: 0 0 20px #0f0; }
-        
-        /* ステータス表示 */
         #status { position: absolute; top: 20px; font-size: 20px; color: #666; }
     </style>
 </head>
 <body>
     <div id="container">
         <div id="status">Ready to connect...</div>
-
         <div id="setup">
             <h1 style="font-size: 40px;">AndroidのIDを入力</h1>
             <input type="text" id="peer-id-input" placeholder="6文字のID">
             <button onclick="connectToAndroid()">連携スタート</button>
         </div>
-
         <div id="display">
             <div id="time-label">BACK TO HOG</div>
             <div id="time-value">0.00s</div>
         </div>
     </div>
-
-    
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -52,47 +42,28 @@
         function connectToAndroid() {
             const targetId = document.getElementById('peer-id-input').value;
             if (!targetId) return alert("IDを入力してください");
-
-            statusDisp.innerText = "Connecting to " + targetId + "...";
-
-            // iPad側も自分のIDを発行してから接続
+            statusDisp.innerText = "Connecting...";
             peer = new Peer();
-
             peer.on('open', () => {
                 conn = peer.connect(targetId);
-
                 conn.on('open', () => {
                     statusDisp.innerText = "CONNECTED";
                     statusDisp.style.color = "#4CAF50";
                     setupDiv.style.display = "none";
                     displayDiv.style.display = "block";
                 });
-
-                // 【重要】Androidからのデータ受信処理
                 conn.on('data', (data) => {
-                    console.log("Received:", data);
                     if (data === "RESET_OK") {
-                        // 10秒経過後のリセット信号
                         timeValue.innerText = "0.00s";
-                        timeValue.style.color = "#0f0";
                     } else {
-                        // タイム（文字列）を受信した場合
                         timeValue.innerText = data;
-                        timeValue.style.color = "yellow"; // 計測完了は黄色
                     }
+                    // どんなデータを受信しても色は常に緑色（#0f0）
+                    timeValue.style.color = "#0f0";
                 });
-
-                conn.on('close', () => {
-                    alert("通信が切断されました。再読み込みしてください。");
-                    location.reload();
-                });
+                conn.on('close', () => { location.reload(); });
             });
-
-            peer.on('error', (err) => {
-                console.error(err);
-                alert("接続に失敗しました。IDが正しいか、Android側が起動しているか確認してください。");
-                statusDisp.innerText = "Error: " + err.type;
-            });
+            peer.on('error', (err) => { alert("接続に失敗しました"); });
         }
     </script>
 </body>
