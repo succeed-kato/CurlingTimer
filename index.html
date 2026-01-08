@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - 10s Reset Sync</title>
+    <title>Curling Pro - Line Sensor</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
@@ -41,30 +41,23 @@
         const idDisplay = document.getElementById('peer-id-display');
 
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
+        
+        // センサーの形状を「線」に変更
         const zones = {
-            start: { x: 0.05, y: 0.3, w: 0.15, h: 0.4, color: "yellow" },
-            end:   { x: 0.80, y: 0.0, w: 0.15, h: 1.0, color: "cyan" }
+            start: { x: 0.1, y: 0.2, h: 0.6, color: "yellow", label: "START" },
+            end:   { x: 0.9, y: 0.0, h: 1.0, color: "cyan",   label: "GOAL" }
         };
         let draggingZone = null;
         let conn = null;
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
-            .then(stream => { 
-                video.srcObject = stream; 
-                msgDisplay.innerText = "リセットを押してください";
-                requestAnimationFrame(analyze); 
-            })
-            .catch(err => { msgDisplay.innerText = "カメラエラー"; });
+            .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); startPeer(); });
 
         function startPeer() {
             const myId = Math.random().toString(36).substring(2, 8);
             const peer = new Peer(myId);
             peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
-            peer.on('connection', (newConn) => { 
-                conn = newConn;
-                msgDisplay.innerText = "iPad連携OK"; 
-                idDisplay.style.background = "#4CAF50";
-            });
+            peer.on('connection', (newConn) => { conn = newConn; msgDisplay.innerText = "iPad連携OK"; idDisplay.style.background = "#4CAF50"; });
             peer.on('error', () => { setTimeout(startPeer, 3000); });
         }
         startPeer();
@@ -75,32 +68,32 @@
             const touchY = (e.touches[0].clientY - rect.top) / canvas.height;
             for (let key in zones) {
                 const z = zones[key];
-                if (touchX > z.x && touchX < z.x + z.w && touchY > z.y && touchY < z.y + z.h) { draggingZone = z; break; }
+                if (Math.abs(touchX - z.x) < 0.05) { draggingZone = z; break; }
             }
         });
         canvas.addEventListener('touchmove', (e) => {
             if (draggingZone) {
                 const rect = canvas.getBoundingClientRect();
-                draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width - draggingZone.w / 2;
-                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
+                draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width;
             }
         });
         canvas.addEventListener('touchend', () => { draggingZone = null; baseStartColor = null; });
 
-        function getAverageColor(zone) {
-            try {
-                const x = Math.max(0, Math.min((zone.x + zone.w/2) * canvas.width, canvas.width - 10));
-                const y = Math.max(0, Math.min((zone.y + zone.h/2) * canvas.height, canvas.height - 10));
-                const data = ctx.getImageData(x, y, 10, 10).data;
-                let r = 0, g = 0, b = 0;
-                for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i+1]; b += data[i+2]; }
-                return (r + g + b) / 300;
-            } catch(e) { return 0; }
+        // 線に沿って複数点の明るさを取得
+        function getLineColor(z) {
+            let total = 0;
+            const samples = 5; // 線に沿って5箇所チェック
+            for(let i=1; i<=samples; i++) {
+                const py = (z.y + (z.h * i / (samples+1))) * canvas.height;
+                const data = ctx.getImageData(z.x * canvas.width, py, 5, 5).data;
+                total += (data[0] + data[1] + data[2]) / 3;
+            }
+            return total / samples;
         }
 
         function calibrate() {
-            baseStartColor = getAverageColor(zones.start);
-            baseEndColor = getAverageColor(zones.end);
+            baseStartColor = getLineColor(zones.start);
+            baseEndColor = getLineColor(zones.end);
             isRunning = false; isCoolingDown = false;
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
             msgDisplay.innerText = "Ready!";
@@ -112,40 +105,36 @@
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 for (let key in zones) {
                     const z = zones[key];
-                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
-                    ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
+                    ctx.strokeStyle = z.color; ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.moveTo(z.x * canvas.width, z.y * canvas.height);
+                    ctx.lineTo(z.x * canvas.width, (z.y + z.h) * canvas.height);
+                    ctx.stroke();
                 }
                 if (baseStartColor !== null && !isCoolingDown) checkMotion();
             }
-            if (isRunning) {
-                timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s";
-            }
+            if (isRunning) { timerDisplay.innerText = ((Date.now() - startTime) / 1000).toFixed(2) + "s"; }
             requestAnimationFrame(analyze);
         }
 
         function checkMotion() {
-            const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
-            const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
-            
-            if (!isRunning && sDiff > 35) {
+            const sDiff = Math.abs(getLineColor(zones.start) - baseStartColor);
+            const eDiff = Math.abs(getLineColor(zones.end) - baseEndColor);
+            if (!isRunning && sDiff > 25) { // 線なので感度を少し鋭く(25)設定
                 startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red";
             }
-            if (isRunning && (Date.now() - startTime > 1500) && eDiff > 35) {
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > 25) {
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
-                
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-
-                // リセット時間を10000（10秒）に設定
                 setTimeout(() => { 
                     isCoolingDown = false; 
                     timerDisplay.innerText = "0.00s"; 
                     msgDisplay.innerText = "Next Shot OK";
-                    // iPadにOK信号を送る
                     try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
-                }, 10000);
+                }, 10000); // 10秒リセット
             }
         }
     </script>
