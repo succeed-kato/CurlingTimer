@@ -3,17 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Hyper Stable</title>
+    <title>Curling Pro - Stable Simple</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
         video { width: 100%; height: 100%; object-fit: contain; background: #111; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; }
+        
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 140px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
-        .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; pointer-events: auto; }
-        .btn-reset { padding: 22px 32px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; }
+        
+        .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 15px; z-index: 9999; pointer-events: auto; }
+        .btn-reset { padding: 22px 32px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; box-shadow: 0 6px 15px rgba(0,0,0,0.5); }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
+
         .slider-box { background: rgba(51, 51, 51, 0.9); padding: 10px; border-radius: 10px; font-size: 14px; text-align: center; }
         input[type=range] { width: 130px; height: 35px; }
         #peer-id-display { font-size: 13px; font-weight: bold; background: #444; color: #fff; padding: 8px; border-radius: 6px; }
@@ -22,7 +25,7 @@
 </head>
 <body>
     <div id="container">
-        <div id="status-log">Loading...</div>
+        <div id="status-log">System: Ready</div>
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
         <div class="controls">
@@ -32,7 +35,7 @@
                 <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
                 <div id="threshold-value">設定: 25</div>
             </div>
-            <div id="peer-id-display">ID: 待機中...</div>
+            <div id="peer-id-display">ID: 準備中...</div>
         </div>
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
@@ -57,55 +60,37 @@
         };
         let draggingZone = null;
 
-        function updateLog(msg) { statusLog.innerText = msg; }
+        function updateLog(msg) { statusLog.innerText = "System: " + msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = "設定: " + val; }
 
-        // --- 何よりも先にカメラを起動 ---
-        async function startSystem() {
-            updateLog("1/2 Camera Booting...");
+        // カメラ起動を最優先
+        async function initCamera() {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, 
                     audio: false 
                 });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => {
-                    updateLog("Camera Active");
-                    requestAnimationFrame(analyze);
-                    // カメラが安定してからID発行を開始（2秒ずらす）
-                    setTimeout(initPeer, 2000);
-                };
-            } catch (err) {
-                updateLog("Camera Error: " + err.name);
-                alert("カメラの起動に失敗しました。ページを再読み込みしてください。");
-            }
+                video.onloadedmetadata = () => { requestAnimationFrame(analyze); };
+            } catch (err) { updateLog("Camera Error"); }
         }
 
+        // 通信機能を少し遅らせて起動
         function initPeer() {
-            updateLog("2/2 ID Issuing...");
-            try {
-                const myId = Math.random().toString(36).substring(2, 8);
-                const peer = new Peer(myId);
-                peer.on('open', id => { 
-                    idDisplay.innerText = "iPad ID: " + id; 
-                    updateLog("System Ready");
-                });
-                peer.on('connection', (newConn) => { 
-                    conn = newConn; 
-                    idDisplay.style.background = "#4CAF50"; 
-                    updateLog("iPad Connected");
-                });
-                peer.on('error', (err) => {
-                    if(err.type === 'unavailable-id') initPeer();
-                    else updateLog("Peer Error");
-                });
-            } catch (e) { updateLog("Peer Load Failed"); }
+            const myId = Math.random().toString(36).substring(2, 8);
+            const peer = new Peer(myId);
+            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
+            peer.on('connection', (newConn) => { 
+                conn = newConn; 
+                idDisplay.style.background = "#4CAF50"; 
+                updateLog("Connected");
+            });
+            peer.on('error', (err) => { if(err.type === 'unavailable-id') setTimeout(initPeer, 1000); });
         }
 
-        // 起動
-        startSystem();
+        initCamera();
+        setTimeout(initPeer, 1500);
 
-        // 枠移動
         canvas.addEventListener('touchstart', (e) => {
             const rect = canvas.getBoundingClientRect();
             const touchX = (e.touches[0].clientX - rect.left) / canvas.width;
@@ -119,4 +104,22 @@
             if (draggingZone) {
                 const rect = canvas.getBoundingClientRect();
                 draggingZone.x = (e.touches[0].clientX - rect.left) / canvas.width - draggingZone.w / 2;
-                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.
+                draggingZone.y = (e.touches[0].clientY - rect.top) / canvas.height - draggingZone.h / 2;
+            }
+        });
+        canvas.addEventListener('touchend', () => { draggingZone = null; });
+
+        function getAverageColor(zone) {
+            const px = Math.floor((zone.x + zone.w/2) * canvas.width);
+            const py = Math.floor((zone.y + zone.h/2) * canvas.height);
+            try {
+                const data = ctx.getImageData(px-5, py-5, 10, 10).data;
+                let sum = 0; 
+                for(let i=0; i<data.length; i+=4) { 
+                    sum += (data[i] + data[i+1] + data[i+2]) / 3; 
+                }
+                return sum / 100;
+            } catch(e) { return 0; }
+        }
+
+        function calibrate() {
