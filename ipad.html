@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Curling iPad Pro Display</title>
+    <title>Curling iPad Pro - Special Edition</title>
     <style>
         body { margin: 0; background: #000; color: #0f0; font-family: sans-serif; text-align: center; overflow: hidden; }
         #container { height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; position: relative; }
@@ -13,28 +13,39 @@
         input { font-size: 40px; padding: 10px; width: 300px; text-align: center; border-radius: 10px; border: none; }
         button { font-size: 30px; padding: 15px 40px; background: #4CAF50; color: white; border: none; border-radius: 15px; font-weight: bold; }
         
-        /* タイム表示 */
+        /* タイム表示エリア */
         #display { display: none; width: 100%; }
+        
+        /* 【復活】ラベル：少し小さめで控えめな緑 */
+        #time-label { 
+            font-size: 4vw; 
+            letter-spacing: 0.5vw; 
+            color: rgba(0, 255, 0, 0.6); 
+            margin-bottom: -2vw; 
+            font-weight: bold;
+        }
+        
         #time-value { 
             font-size: 30vw; font-weight: bold; 
             text-shadow: 0 0 30px rgba(0, 255, 0, 0.5); 
         }
 
-        /* 【新機能】右上のOK表示 */
+        /* 右上のOKインジケーター */
         #ok-indicator { 
             position: absolute; 
             top: 40px; 
             right: 40px; 
-            font-size: 8vw; 
+            font-size: 7vw; 
             font-weight: bold; 
-            border: 6px solid #0f0; 
-            padding: 10px 30px; 
-            border-radius: 20px; 
-            display: none; /* 最初は隠しておく */
-            box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+            border: 5px solid #0f0; 
+            padding: 10px 25px; 
+            border-radius: 15px; 
+            display: none; 
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+            background: rgba(0, 50, 0, 0.3);
         }
         
-        #status { position: absolute; top: 20px; left: 20px; font-size: 18px; color: #444; }
+        #status { position: absolute; top: 20px; left: 20px; font-size: 16px; color: #333; }
     </style>
 </head>
 <body>
@@ -42,13 +53,14 @@
         <div id="status">Ready</div>
 
         <div id="setup">
-            <h1 style="font-size: 40px; color: #fff;">Android IDを入力</h1>
-            <input type="text" id="peer-id-input" placeholder="IDを入力">
-            <button onclick="connectToAndroid()">連携スタート</button>
+            <h1 style="font-size: 36px; color: #fff; letter-spacing: 2px;">CURLING TIMER</h1>
+            <input type="text" id="peer-id-input" placeholder="ENTER ID">
+            <button onclick="connectToAndroid()">CONNECT</button>
         </div>
 
         <div id="display">
             <div id="ok-indicator">OK</div>
+            <div id="time-label">BACK TO HOG</div>
             <div id="time-value">0.00s</div>
         </div>
     </div>
@@ -83,24 +95,19 @@
 
                 conn.on('data', (data) => {
                     if (data === "RESET_OK") {
-                        // 【ルール1】リセット完了時：OKを右上に表示（秒数はそのまま）
+                        // リセット完了：OKを表示（タイムとラベルはそのまま）
                         okIndicator.style.display = "block";
                     } else {
-                        // 【ルール2】新しい秒数が届いた時：OKを消して、秒数を更新
+                        // 新規計測：OKを消して更新
                         okIndicator.style.display = "none";
                         timeValue.innerText = data;
                     }
                 });
 
-                conn.on('close', () => {
-                    location.reload();
-                });
+                conn.on('close', () => { location.reload(); });
             });
 
-            peer.on('error', (err) => {
-                alert("接続に失敗しました。");
-                statusDisp.innerText = "Error";
-            });
+            peer.on('error', (err) => { alert("接続に失敗しました"); });
         }
     </script>
 </body>
