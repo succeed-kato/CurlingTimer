@@ -38,10 +38,10 @@
             padding: 8px; border-radius: 12px; border: 1px solid #666;
         }
 
-        /* 感度スライダー：ご自身で見つけた -130px を採用！ */
+        /* 感度スライダー：ご自身で見つけた -135px を採用！ */
         .side-controls { 
             position: absolute; 
-            right: -130px; 
+            right: -135px; 
             top: 50%; 
             transform: translateY(-50%) rotate(-90deg); 
             display: flex; 
@@ -63,7 +63,7 @@
 </head>
 <body>
     <div id="start-overlay">
-        <h2 style="margin-bottom:20px;">カーリング・タイマー</h2>
+        <h2 style="margin-bottom:20px;">カニバター・タイマー</h2>
         <button class="btn-start" onclick="startApp()">アプリを起動する</button>
     </div>
 
@@ -221,4 +221,10 @@
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
                 setTimeout(() => { 
                     isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
-                    try {
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
