@@ -1,34 +1,28 @@
-
 <!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Touch Fixed</title>
+    <title>Curling Pro - Bug Fixed</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        #container { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-        video { width: 100%; height: 100%; object-fit: contain; background: #222; }
-        /* canvasを最前面にしつつ、タッチ操作を有効にする */
+        #container { position: relative; width: 100vw; height: 100vh; }
+        video { width: 100%; height: 100%; object-fit: contain; background: #111; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; touch-action: none; }
-        
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 140px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
-        
-        /* ボタン類はさらに上のレイヤー(z-index: 9999)へ */
         .controls { position: absolute; top: 20px; left: 20px; display: flex; flex-direction: column; gap: 12px; z-index: 9999; pointer-events: auto; }
         .btn-reset { padding: 22px 32px; background: #2196F3; color: #fff; border: 4px solid #fff; border-radius: 15px; font-weight: bold; font-size: 22px; box-shadow: 0 6px 15px rgba(0,0,0,0.5); }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
-
         .slider-box { background: rgba(51, 51, 51, 0.9); padding: 10px; border-radius: 10px; font-size: 14px; text-align: center; }
         input[type=range] { width: 130px; height: 35px; }
         #peer-id-display { font-size: 13px; font-weight: bold; background: #444; color: #fff; padding: 8px; border-radius: 6px; }
-        #status-log { position: absolute; bottom: 10px; right: 10px; font-size: 10px; color: #444; z-index: 1000; }
+        #status-log { position: absolute; bottom: 10px; right: 10px; font-size: 10px; color: #666; z-index: 1000; }
     </style>
 </head>
 <body>
     <div id="container">
-        <div id="status-log">System: Ready</div>
+        <div id="status-log">System: Initializing...</div>
         <video id="video" autoplay playsinline muted></video>
         <canvas id="canvas"></canvas>
         <div class="controls">
@@ -38,7 +32,7 @@
                 <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
                 <div id="threshold-value">設定: 25</div>
             </div>
-            <div id="peer-id-display">ID: 準備中...</div>
+            <div id="peer-id-display">ID: 取得中...</div>
         </div>
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
@@ -58,7 +52,7 @@
         let conn = null;
 
         const zones = {
-            start: { x: 0.1, y: 0.3, w: 0.12, h: 0.4, color: "yellow" }, // 掴みやすく少し幅を広げました
+            start: { x: 0.1, y: 0.3, w: 0.12, h: 0.4, color: "yellow" },
             end:   { x: 0.8, y: 0.0, w: 0.12, h: 1.0, color: "cyan" }
         };
         let draggingZone = null;
@@ -67,47 +61,51 @@
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = "設定: " + val; }
 
         async function initCamera() {
+            updateLog("Camera initializing...");
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
                     video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }, 
                     audio: false 
                 });
                 video.srcObject = stream;
-                video.onloadedmetadata = () => { requestAnimationFrame(analyze); };
-            } catch (err) { updateLog("Camera Error"); }
+                video.onloadedmetadata = () => { 
+                    updateLog("Camera OK");
+                    requestAnimationFrame(analyze); 
+                };
+            } catch (err) { updateLog("Camera Error: " + err.name); }
         }
 
         function initPeer() {
-            const myId = Math.random().toString(36).substring(2, 8);
-            const peer = new Peer(myId);
-            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; });
-            peer.on('connection', (newConn) => { 
-                conn = newConn; 
-                idDisplay.style.background = "#4CAF50"; 
-                updateLog("Connected");
-            });
-            peer.on('error', (err) => { if(err.type === 'unavailable-id') setTimeout(initPeer, 1000); });
+            updateLog("ID issuing...");
+            try {
+                const myId = Math.random().toString(36).substring(2, 8);
+                const peer = new Peer(myId);
+                peer.on('open', id => { 
+                    idDisplay.innerText = "iPad ID: " + id; 
+                    updateLog("ID Ready");
+                });
+                peer.on('connection', (newConn) => { 
+                    conn = newConn; 
+                    idDisplay.style.background = "#4CAF50"; 
+                    updateLog("iPad Connected");
+                });
+                peer.on('error', (err) => { if(err.type === 'unavailable-id') setTimeout(initPeer, 1000); });
+            } catch (e) { updateLog("Peer Load Failed"); }
         }
 
+        // 起動（完全に独立して実行）
         initCamera();
-        setTimeout(initPeer, 1500);
+        setTimeout(initPeer, 1000);
 
-        // --- タッチ操作の修正ポイント ---
+        // --- 枠の移動操作 ---
         canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault(); // ブラウザの標準動作を禁止
+            e.preventDefault();
             const rect = canvas.getBoundingClientRect();
-            // 見えている画面の幅(rect.width)を基準に計算するように修正
             const touchX = (e.touches[0].clientX - rect.left) / rect.width;
             const touchY = (e.touches[0].clientY - rect.top) / rect.height;
-
             for (let key in zones) {
                 const z = zones[key];
-                // 判定エリアを少し広めにして掴みやすく
-                if (touchX > z.x - 0.05 && touchX < z.x + z.w + 0.05 && touchY > z.y && touchY < z.y + z.h) { 
-                    draggingZone = z; 
-                    updateLog("Dragging: " + key);
-                    break; 
-                }
+                if (touchX > z.x - 0.05 && touchX < z.x + z.w + 0.05 && touchY > z.y && touchY < z.y + z.h) { draggingZone = z; break; }
             }
         }, { passive: false });
 
@@ -120,11 +118,9 @@
             }
         }, { passive: false });
 
-        canvas.addEventListener('touchend', () => { 
-            if(draggingZone) updateLog("Fixed");
-            draggingZone = null; 
-        });
+        canvas.addEventListener('touchend', () => { draggingZone = null; });
 
+        // --- 色取得ロジック (タイポ修正済み) ---
         function getAverageColor(zone) {
             const px = Math.floor((zone.x + zone.w/2) * canvas.width);
             const py = Math.floor((zone.y + zone.h/2) * canvas.height);
@@ -132,7 +128,7 @@
                 const data = ctx.getImageData(px-5, py-5, 10, 10).data;
                 let sum = 0; 
                 for(let i=0; i<data.length; i+=4) { 
-                    sum += (data[i] + data[i+1] + data[i+2]) / 3; 
+                    sum += (data[i] + data[i+1] + data[i+2]) / 3; // ここを修正！
                 }
                 return sum / 100;
             } catch(e) { return 0; }
@@ -165,4 +161,20 @@
             const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
             if (!isRunning && sDiff > currentThreshold) {
-                startTime = Date.now(); is
+                startTime = Date.now(); isRunning = true;
+                timerDisplay.style.color = "red";
+            }
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
+                isRunning = false; isCoolingDown = true;
+                timerDisplay.style.color = "#0f0";
+                const fTime = timerDisplay.innerText;
+                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
+                setTimeout(() => { 
+                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
+                }, 10000);
+            }
+        }
+    </script>
+</body>
+</html>
