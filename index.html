@@ -3,25 +3,28 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, orientation=landscape">
-    <title>Curling Pro - Slim Box</title>
+    <title>Curling Pro - Sensitivity Slider</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; }
         video { width: 100%; height: 100%; object-fit: contain; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         
-        /* タイマー：中央寄り */
         #timer-container { position: absolute; top: 50%; left: 55%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; display: inline-block; transform: rotate(-90deg); white-space: nowrap; }
         
-        /* メッセージ：左寄り */
         .ui-msg-container { position: absolute; top: 50%; left: 12%; transform: translateY(-50%); pointer-events: none; z-index: 110; }
         #msg { background: rgba(0,0,0,0.8); display: inline-block; padding: 15px 20px; border-radius: 12px; font-size: 18px; color: #fff; transform: rotate(-90deg); border: 2px solid #2196F3; min-width: 180px;}
         
-        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 10px;}
-        .btn-reset { padding: 18px 22px; background: #2196F3; color: #fff; border: 3px solid #fff; border-radius: 12px; font-weight: bold; font-size: 18px; }
-        .btn-reload { padding: 8px; background: #444; color: #ccc; border: none; border-radius: 6px; font-size: 11px; }
-        #peer-id-display { font-size: 14px; font-weight: bold; background: #333; color: #fff; padding: 8px; border-radius: 4px; }
+        /* コントロールパネルの強化 */
+        .controls { position: absolute; top: 10px; left: 10px; pointer-events: auto; z-index: 200; display: flex; flex-direction: column; gap: 10px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 10px;}
+        .btn-reset { padding: 15px; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 10px; font-weight: bold; font-size: 18px; }
+        
+        /* スライダーのデザイン */
+        .slider-box { display: flex; flex-direction: column; gap: 5px; background: #333; padding: 10px; border-radius: 8px; font-size: 12px; }
+        input[type=range] { width: 120px; height: 30px; }
+        
+        #peer-id-display { font-size: 12px; font-weight: bold; background: #444; color: #fff; padding: 5px; border-radius: 4px; }
     </style>
 </head>
 <body>
@@ -30,9 +33,17 @@
         <canvas id="canvas"></canvas>
         <div class="controls">
             <button class="btn-reset" onclick="calibrate()">リセット</button>
+            
+            <div class="slider-box">
+                <span>検知感度 (しきい値)</span>
+                <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
+                <span id="threshold-value">設定: 25</span>
+            </div>
+
             <div id="peer-id-display">ID: 取得中...</div>
-            <button class="btn-reload" onclick="location.reload()">再起動</button>
+            <button onclick="location.reload()" style="font-size: 10px; background: #555; color: #ccc; border: none;">再起動</button>
         </div>
+
         <div id="timer-container"><div id="timer">0.00s</div></div>
         <div class="ui-msg-container"><div id="msg">「リセット」で開始</div></div>
     </div>
@@ -45,16 +56,22 @@
         const timerDisplay = document.getElementById('timer');
         const msgDisplay = document.getElementById('msg');
         const idDisplay = document.getElementById('peer-id-display');
+        const threshValDisp = document.getElementById('threshold-value');
 
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
-        
-        // 枠の設定（w: 0.10 にスリム化しました）
+        let currentThreshold = 25; // 初期値
+
         const zones = {
             start: { x: 0.1, y: 0.3, w: 0.10, h: 0.4, color: "yellow" },
             end:   { x: 0.8, y: 0.0, w: 0.10, h: 1.0, color: "cyan" }
         };
         let draggingZone = null;
         let conn = null;
+
+        function updateThreshold(val) {
+            currentThreshold = parseInt(val);
+            threshValDisp.innerText = "設定: " + val;
+        }
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; requestAnimationFrame(analyze); startPeer(); });
@@ -123,14 +140,17 @@
             const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
             
-            // 四角枠用の安定した感度（25）
-            const threshold = 25;
+            if (!isRunning) {
+                // 現在の変化量を表示
+                msgDisplay.innerText = "READY (変化量:" + Math.floor(sDiff) + ")";
+            }
 
-            if (!isRunning && sDiff > threshold) {
+            // スライダーで設定したしきい値を使用
+            if (!isRunning && sDiff > currentThreshold) {
                 startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red"; msgDisplay.innerText = "GO!";
             }
-            if (isRunning && (Date.now() - startTime > 1500) && eDiff > threshold) {
+            if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
