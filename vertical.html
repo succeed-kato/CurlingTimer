@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Standard UI</title>
+    <title>Curling Timer - Slim Borders</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
         video { width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; touch-action: none; }
         
-        /* タイマー：0度（標準） */
+        /* タイマー：標準（0度） */
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
@@ -19,14 +19,14 @@
 
         #peer-id-display { width: 75%; font-size: 14px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; padding: 8px; border-radius: 12px; border: 1px solid #666; }
 
-        /* 右側コントロール：感度 (-130px) */
+        /* 右側：感度スライダー (-130px) */
         .side-controls-right { 
             position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); 
             display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
             background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px;
         }
 
-        /* 左側コントロール：ズーム (-130px) */
+        /* 左側：ズームスライダー (-130px) */
         .side-controls-left { 
             position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); 
             display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
@@ -35,11 +35,10 @@
 
         input[type=range] { width: 180px; height: 40px; }
 
-        /* 【改善】数字の向きをタイマーと統一（0度に見えるように回転） */
+        /* 数字の向きをタイマーに合わせる */
         .val-disp { font-size: 14px; font-weight: bold; color: #2196F3; width: 35px; transform: rotate(90deg); text-align: center; }
         .val-disp-left { font-size: 14px; font-weight: bold; color: #FF9800; width: 35px; transform: rotate(-90deg); text-align: center; }
         
-        /* ラベルの文字もついでにタイマーと同じ向きに */
         .label-text-right { font-size: 10px; color: #888; transform: rotate(90deg); }
         .label-text-left { font-size: 10px; color: #888; transform: rotate(-90deg); }
 
@@ -186,7 +185,9 @@
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                 for (let key in zones) {
                     const z = zones[key];
-                    ctx.strokeStyle = z.color; ctx.lineWidth = 6;
+                    ctx.strokeStyle = z.color; 
+                    // 【修正箇所】線の太さを 6 から 3 に変更
+                    ctx.lineWidth = 3; 
                     ctx.strokeRect(z.x * canvas.width, z.y * canvas.height, z.w * canvas.width, z.h * canvas.height);
                 }
                 if (baseStartColor !== null && !isCoolingDown) checkMotion();
