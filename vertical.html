@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Interval Pro</title>
+    <title>Curling Timer - Pro Interval</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -13,7 +13,6 @@
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        /* 上部コントロール：4要素を横一列に */
         .top-controls { 
             position: absolute; top: 15px; left: 0; width: 100%; 
             display: flex; flex-direction: row; justify-content: center; align-items: stretch; 
@@ -27,14 +26,12 @@
 
         #peer-id-display { flex: 2.2; font-size: 11px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #666; min-height: 40px; }
 
-        /* 【新設】リセット間隔プルダウン */
         #interval-select { 
             flex: 1.2; background: #444; color: #0f0; border: 1px solid #0f0; 
             border-radius: 8px; font-size: 12px; font-weight: bold; text-align: center;
             outline: none; -webkit-appearance: none; appearance: none;
         }
 
-        /* サイドコントロール */
         .side-controls-right { position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         .side-controls-left { position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         input[type=range] { width: 180px; height: 40px; }
@@ -68,6 +65,8 @@
                 <option value="5000">5秒</option>
                 <option value="10000" selected>10秒</option>
                 <option value="15000">15秒</option>
+                <option value="20000">20秒</option>
+                <option value="30000">30秒</option>
             </select>
         </div>
 
@@ -85,8 +84,6 @@
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
 
-    
-
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         const video = document.getElementById('video');
@@ -102,14 +99,10 @@
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         let currentThreshold = 25;
         let conn = null, peer = null;
-
-        // 【新設】リセット間隔（ミリ秒）。初期値は10秒。
         let resetInterval = 10000;
 
         function updateLog(msg) { statusLog.innerText = msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
-        
-        // 【新設】プルダウン変更時に間隔を更新
         function updateInterval(val) {
             resetInterval = parseInt(val);
             updateLog("Interval: " + (resetInterval/1000) + "s");
@@ -230,7 +223,6 @@
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-                // 【変更】設定された resetInterval 秒後にリセット処理を実行
                 setTimeout(() => { 
                     isCoolingDown = false; 
                     timerDisplay.innerText = "0.00s"; 
