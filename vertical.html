@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Pro</title>
+    <title>Curling Timer - Zoom Edition</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -13,61 +13,36 @@
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        .top-controls { 
-            position: absolute; 
-            top: 5px; 
-            left: 0; 
-            width: 100%; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            gap: 8px; 
-            z-index: 9999; 
-            pointer-events: auto; 
-        }
-        .btn-reset { 
-            width: 85%; padding: 18px; background: #2196F3; color: #fff; 
-            border: 3px solid #fff; border-radius: 12px; font-weight: bold; font-size: 22px; 
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-        }
-        .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
+        .top-controls { position: absolute; top: 5px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 9999; pointer-events: auto; }
+        .btn-reset { width: 85%; padding: 18px; background: #2196F3; color: #fff; border: 3px solid #fff; border-radius: 12px; font-weight: bold; font-size: 22px; }
 
-        #peer-id-display { 
-            width: 75%; font-size: 14px; font-weight: bold; 
-            background: rgba(50, 50, 50, 0.9); color: #fff; 
-            padding: 8px; border-radius: 12px; border: 1px solid #666;
+        #peer-id-display { width: 75%; font-size: 14px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; padding: 8px; border-radius: 12px; border: 1px solid #666; }
+
+        /* 右端：感度スライダー (-130px) */
+        .side-controls-right { 
+            position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); 
+            display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
+            background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px;
         }
 
-        /* 【修正点1】ご指定の -130px に設定 */
-        .side-controls { 
-            position: absolute; 
-            right: -130px; 
-            top: 50%; 
-            transform: translateY(-50%) rotate(-90deg); 
-            display: flex; 
-            align-items: center; 
-            gap: 15px; 
-            z-index: 9999; 
-            pointer-events: auto; 
-            background: rgba(51, 51, 51, 0.4); 
-            padding: 2px 20px; 
-            border-radius: 5px;
+        /* 【新設】左端：ズームスライダー (left: -130px) */
+        .side-controls-left { 
+            position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); 
+            display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
+            background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px;
         }
+
         input[type=range] { width: 180px; height: 40px; }
-        #threshold-value { font-size: 14px; font-weight: bold; color: #2196F3; width: 30px; transform: rotate(90deg); text-align: center; }
+        .val-disp { font-size: 14px; font-weight: bold; color: #2196F3; width: 30px; transform: rotate(-90deg); text-align: center; }
+        .val-disp-left { font-size: 14px; font-weight: bold; color: #FF9800; width: 30px; transform: rotate(-90deg); text-align: center; }
         
         #status-log { position: absolute; top: 5px; right: 5px; font-size: 9px; color: #555; z-index: 1000; }
-
-        /* 【修正点2】タイトルを「カーリング・タイマー」に変更 */
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <div id="start-overlay">
-        <h2 style="margin-bottom:20px;">カーリング・タイマー</h2>
-        <button class="btn-start" onclick="startApp()">アプリを起動する</button>
-    </div>
+    <div id="start-overlay"><h2 style="margin-bottom:20px;">カーリング・タイマー</h2><button class="btn-start" onclick="startApp()">アプリを起動する</button></div>
 
     <div id="container">
         <div id="status-log">Status: Initializing...</div>
@@ -79,10 +54,16 @@
             <div id="peer-id-display" onclick="initPeer()">ID: 取得中...</div>
         </div>
 
-        <div class="side-controls">
+        <div class="side-controls-left">
+            <div style="font-size:10px; color:#888; transform: rotate(-180deg);">ズーム</div>
+            <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="updateZoom(this.value)">
+            <div id="zoom-value" class="val-disp-left">x1</div>
+        </div>
+
+        <div class="side-controls-right">
             <div style="font-size:10px; color:#888;">感度</div>
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
-            <div id="threshold-value">25</div>
+            <div id="threshold-value" class="val-disp">25</div>
         </div>
 
         <div id="timer-container"><div id="timer">0.00s</div></div>
@@ -96,6 +77,7 @@
         const timerDisplay = document.getElementById('timer');
         const idDisplay = document.getElementById('peer-id-display');
         const threshValDisp = document.getElementById('threshold-value');
+        const zoomValDisp = document.getElementById('zoom-value');
         const statusLog = document.getElementById('status-log');
         const startOverlay = document.getElementById('start-overlay');
 
@@ -112,10 +94,22 @@
         function updateLog(msg) { statusLog.innerText = "Status: " + msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
 
+        // --- ズーム適用関数 ---
+        async function updateZoom(val) {
+            zoomValDisp.innerText = "x" + val;
+            const [track] = video.srcObject.getVideoTracks();
+            const capabilities = track.getCapabilities();
+            if (capabilities.zoom) {
+                try {
+                    await track.applyConstraints({ advanced: [{ zoom: val }] });
+                } catch (e) { console.error("Zoom not supported", e); }
+            }
+        }
+
         async function startApp() {
             startOverlay.style.display = 'none';
             initPeer();
-            initCamera();
+            await initCamera();
         }
 
         async function initCamera() {
@@ -124,31 +118,26 @@
                 video.srcObject = stream;
                 await video.play();
                 updateLog("Camera OK");
+
+                // カメラのズーム性能を確認してスライダーの最大値を調整
+                const [track] = stream.getVideoTracks();
+                const caps = track.getCapabilities();
+                if (caps.zoom) {
+                    const slider = document.getElementById('zoom-slider');
+                    slider.min = caps.zoom.min;
+                    slider.max = caps.zoom.max;
+                    slider.step = caps.zoom.step;
+                }
+
                 requestAnimationFrame(analyze);
             } catch (err) { updateLog("Camera Error"); }
         }
 
         function initPeer() {
-            updateLog("Connecting...");
-            idDisplay.innerText = "ID: 取得中...";
-            if (peer) { peer.destroy(); }
             const myId = Math.random().toString(36).substring(2, 8);
             peer = new Peer(myId);
-            peer.on('open', id => { 
-                idDisplay.innerText = "iPad ID: " + id; 
-                idDisplay.style.background = "rgba(50, 50, 50, 0.9)";
-                updateLog("Ready"); 
-            });
-            peer.on('connection', (newConn) => { 
-                conn = newConn; 
-                idDisplay.style.background = "#4CAF50"; 
-                updateLog("Connected");
-            });
-            peer.on('error', () => { 
-                updateLog("Peer Error");
-                idDisplay.innerText = "失敗 (タップで再試行)";
-                idDisplay.style.background = "#d32f2f";
-            });
+            peer.on('open', id => { idDisplay.innerText = "iPad ID: " + id; updateLog("Ready"); });
+            peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
         }
 
         canvas.addEventListener('touchstart', (e) => {
@@ -158,9 +147,7 @@
             const touchY = (e.touches[0].clientY - rect.top) / rect.height;
             for (let key in zones) {
                 const z = zones[key];
-                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { 
-                    draggingZone = z; break; 
-                }
+                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { draggingZone = z; break; }
             }
         }, { passive: false });
 
@@ -219,10 +206,7 @@
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-                setTimeout(() => { 
-                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
-                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {}
-                }, 10000);
+                setTimeout(() => { isCoolingDown = false; timerDisplay.innerText = "0.00s"; try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} }, 10000);
             }
         }
     </script>
