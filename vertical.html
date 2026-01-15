@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Visible UI</title>
+    <title>Curling Timer - Ultra Slim</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -13,10 +13,10 @@
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        /* 【修正】位置を下げ、背景色を追加して見やすく */
+        /* 【修正】topを15pxに引き上げ、さらにスリムに */
         .top-controls { 
             position: absolute; 
-            top: 30px; /* 10pxから30pxへ下げました */
+            top: 15px; 
             left: 0; 
             width: 100%; 
             display: flex; 
@@ -24,30 +24,30 @@
             justify-content: center; 
             align-items: stretch; 
             gap: 8px; 
-            padding: 10px; /* 内側に余白を追加 */
+            padding: 5px 10px; 
             box-sizing: border-box; 
             z-index: 9999; 
-            background: rgba(0, 0, 0, 0.5); /* 半透明の背景でボタンを際立たせる */
+            background: rgba(0, 0, 0, 0.4); 
         }
         
         .btn-reset { 
-            flex: 2; padding: 12px 0; background: #2196F3; color: #fff; border: 2px solid #fff; 
-            border-radius: 8px; font-weight: bold; font-size: 16px; min-height: 44px;
+            flex: 2; padding: 10px 0; background: #2196F3; color: #fff; border: 2px solid #fff; 
+            border-radius: 8px; font-weight: bold; font-size: 16px; min-height: 40px;
         }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
 
         #peer-id-display { 
             flex: 3; font-size: 12px; font-weight: bold; background: rgba(50, 50, 50, 0.9); 
             color: #fff; display: flex; align-items: center; justify-content: center; 
-            border-radius: 8px; border: 1px solid #666; min-height: 44px;
+            border-radius: 8px; border: 1px solid #666; min-height: 40px;
         }
 
         .btn-back { 
-            flex: 1; padding: 12px 0; background: #555; color: #fff; border: 1px solid #888; 
-            border-radius: 8px; font-size: 12px; font-weight: bold; min-height: 44px;
+            flex: 1; padding: 10px 0; background: #555; color: #fff; border: 1px solid #888; 
+            border-radius: 8px; font-size: 12px; font-weight: bold; min-height: 40px;
         }
 
-        /* サイドコントロール（位置はそのまま） */
+        /* サイドコントロール */
         .side-controls-right { position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         .side-controls-left { position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         input[type=range] { width: 180px; height: 40px; }
@@ -93,8 +93,6 @@
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
 
-    
-
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
         const video = document.getElementById('video');
@@ -123,8 +121,7 @@
         async function updateZoom(val) {
             zoomValDisp.innerText = "x" + val;
             const [track] = video.srcObject.getVideoTracks();
-            const capabilities = track.getCapabilities();
-            if (capabilities.zoom) {
+            if (track.getCapabilities().zoom) {
                 try {
                     await track.applyConstraints({ advanced: [{ zoom: val }] });
                 } catch (e) { console.error(e); }
