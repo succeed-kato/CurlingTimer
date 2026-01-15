@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Pro Zoom</title>
+    <title>Curling Timer - Standard UI</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
         video { width: 100%; height: 100%; object-fit: cover; }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 20; touch-action: none; }
         
+        /* タイマー：0度（標準） */
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
@@ -18,14 +19,14 @@
 
         #peer-id-display { width: 75%; font-size: 14px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; padding: 8px; border-radius: 12px; border: 1px solid #666; }
 
-        /* 右側：感度スライダー (-130px) */
+        /* 右側コントロール：感度 (-130px) */
         .side-controls-right { 
             position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); 
             display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
             background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px;
         }
 
-        /* 左側：ズームスライダー (-130px) */
+        /* 左側コントロール：ズーム (-130px) */
         .side-controls-left { 
             position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); 
             display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; 
@@ -34,12 +35,14 @@
 
         input[type=range] { width: 180px; height: 40px; }
 
-        /* 【修正点1】感度の数字をさらに180度回転 (rotate(-90deg) で逆さまに) */
-        .val-disp { font-size: 14px; font-weight: bold; color: #2196F3; width: 30px; transform: rotate(-90deg); text-align: center; }
+        /* 【改善】数字の向きをタイマーと統一（0度に見えるように回転） */
+        .val-disp { font-size: 14px; font-weight: bold; color: #2196F3; width: 35px; transform: rotate(90deg); text-align: center; }
+        .val-disp-left { font-size: 14px; font-weight: bold; color: #FF9800; width: 35px; transform: rotate(-90deg); text-align: center; }
         
-        /* ズームの数字は正位置 */
-        .val-disp-left { font-size: 14px; font-weight: bold; color: #FF9800; width: 30px; transform: rotate(-90deg); text-align: center; }
-        
+        /* ラベルの文字もついでにタイマーと同じ向きに */
+        .label-text-right { font-size: 10px; color: #888; transform: rotate(90deg); }
+        .label-text-left { font-size: 10px; color: #888; transform: rotate(-90deg); }
+
         #status-log { position: absolute; top: 5px; right: 5px; font-size: 9px; color: #555; z-index: 1000; }
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; }
@@ -59,13 +62,13 @@
         </div>
 
         <div class="side-controls-left">
-            <div style="font-size:10px; color:#888; transform: rotate(-180deg);">ズーム</div>
+            <div class="label-text-left">ズーム</div>
             <input type="range" id="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="updateZoom(this.value)">
             <div id="zoom-value" class="val-disp-left">x1</div>
         </div>
 
         <div class="side-controls-right">
-            <div style="font-size:10px; color:#888;">感度</div>
+            <div class="label-text-right">感度</div>
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
             <div id="threshold-value" class="val-disp">25</div>
         </div>
@@ -105,7 +108,7 @@
             if (capabilities.zoom) {
                 try {
                     await track.applyConstraints({ advanced: [{ zoom: val }] });
-                } catch (e) { console.error("Zoom failed", e); }
+                } catch (e) { console.error(e); }
             }
         }
 
@@ -121,17 +124,12 @@
                 video.srcObject = stream;
                 await video.play();
                 updateLog("Camera OK");
-
-                // 【修正点2】カメラの能力をチェックしつつ、上限を5倍に制限
                 const [track] = stream.getVideoTracks();
                 const caps = track.getCapabilities();
                 if (caps.zoom) {
                     const slider = document.getElementById('zoom-slider');
-                    slider.min = caps.zoom.min;
-                    slider.max = Math.min(caps.zoom.max, 5); // 5倍を超えないように設定
-                    slider.step = caps.zoom.step;
+                    slider.min = caps.zoom.min; slider.max = Math.min(caps.zoom.max, 5); slider.step = caps.zoom.step;
                 }
-
                 requestAnimationFrame(analyze);
             } catch (err) { updateLog("Camera Error"); }
         }
