@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Ultra Slim</title>
+    <title>Curling Timer - Interval Pro</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -13,38 +13,25 @@
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        /* 【修正】topを15pxに引き上げ、さらにスリムに */
+        /* 上部コントロール：4要素を横一列に */
         .top-controls { 
-            position: absolute; 
-            top: 15px; 
-            left: 0; 
-            width: 100%; 
-            display: flex; 
-            flex-direction: row; 
-            justify-content: center; 
-            align-items: stretch; 
-            gap: 8px; 
-            padding: 5px 10px; 
-            box-sizing: border-box; 
-            z-index: 9999; 
+            position: absolute; top: 15px; left: 0; width: 100%; 
+            display: flex; flex-direction: row; justify-content: center; align-items: stretch; 
+            gap: 5px; padding: 5px 8px; box-sizing: border-box; z-index: 9999; 
             background: rgba(0, 0, 0, 0.4); 
         }
         
-        .btn-reset { 
-            flex: 2; padding: 10px 0; background: #2196F3; color: #fff; border: 2px solid #fff; 
-            border-radius: 8px; font-weight: bold; font-size: 16px; min-height: 40px;
-        }
+        .btn-back { flex: 0.8; padding: 10px 0; background: #555; color: #fff; border: 1px solid #888; border-radius: 8px; font-size: 11px; font-weight: bold; min-height: 40px; }
+        .btn-reset { flex: 1.5; padding: 10px 0; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 15px; min-height: 40px; }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
 
-        #peer-id-display { 
-            flex: 3; font-size: 12px; font-weight: bold; background: rgba(50, 50, 50, 0.9); 
-            color: #fff; display: flex; align-items: center; justify-content: center; 
-            border-radius: 8px; border: 1px solid #666; min-height: 40px;
-        }
+        #peer-id-display { flex: 2.2; font-size: 11px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #666; min-height: 40px; }
 
-        .btn-back { 
-            flex: 1; padding: 10px 0; background: #555; color: #fff; border: 1px solid #888; 
-            border-radius: 8px; font-size: 12px; font-weight: bold; min-height: 40px;
+        /* 【新設】リセット間隔プルダウン */
+        #interval-select { 
+            flex: 1.2; background: #444; color: #0f0; border: 1px solid #0f0; 
+            border-radius: 8px; font-size: 12px; font-weight: bold; text-align: center;
+            outline: none; -webkit-appearance: none; appearance: none;
         }
 
         /* サイドコントロール */
@@ -76,6 +63,12 @@
             <button class="btn-back" onclick="goBack()">戻る</button>
             <button class="btn-reset" onclick="calibrate()">リセット</button>
             <div id="peer-id-display" onclick="initPeer()">ID: 取得中...</div>
+            
+            <select id="interval-select" onchange="updateInterval(this.value)">
+                <option value="5000">5秒</option>
+                <option value="10000" selected>10秒</option>
+                <option value="15000">15秒</option>
+            </select>
         </div>
 
         <div class="side-controls-left">
@@ -83,7 +76,6 @@
             <input type="range" id="zoom-slider" min="1" max="3.5" step="0.1" value="1" oninput="updateZoom(this.value)">
             <div id="zoom-value" class="val-disp-left">x1</div>
         </div>
-
         <div class="side-controls-right">
             <div class="label-text-right">感度</div>
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
@@ -92,6 +84,8 @@
 
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
+
+    
 
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <script>
@@ -109,14 +103,17 @@
         let currentThreshold = 25;
         let conn = null, peer = null;
 
-        const zones = {
-            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
-            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
-        };
-        let draggingZone = null;
+        // 【新設】リセット間隔（ミリ秒）。初期値は10秒。
+        let resetInterval = 10000;
 
         function updateLog(msg) { statusLog.innerText = msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
+        
+        // 【新設】プルダウン変更時に間隔を更新
+        function updateInterval(val) {
+            resetInterval = parseInt(val);
+            updateLog("Interval: " + (resetInterval/1000) + "s");
+        }
 
         async function updateZoom(val) {
             zoomValDisp.innerText = "x" + val;
@@ -134,9 +131,7 @@
             if (!video.srcObject) initCamera();
         }
 
-        function goBack() {
-            startOverlay.style.display = 'flex';
-        }
+        function goBack() { startOverlay.style.display = 'flex'; }
 
         async function initCamera() {
             try {
@@ -148,9 +143,7 @@
                 const caps = track.getCapabilities();
                 if (caps.zoom) {
                     const slider = document.getElementById('zoom-slider');
-                    slider.min = caps.zoom.min; 
-                    slider.max = Math.min(caps.zoom.max, 3.5); 
-                    slider.step = caps.zoom.step;
+                    slider.min = caps.zoom.min; slider.max = Math.min(caps.zoom.max, 3.5); slider.step = caps.zoom.step;
                 }
                 requestAnimationFrame(analyze);
             } catch (err) { updateLog("Camera Error"); }
@@ -163,7 +156,7 @@
             peer = new Peer(myId);
             peer.on('open', id => { idDisplay.innerText = "ID: " + id; updateLog("Ready"); });
             peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
-            peer.on('error', (err) => { updateLog("Connection Error"); idDisplay.innerText = "ID: エラー (タップ)"; });
+            peer.on('error', (err) => { idDisplay.innerText = "ID: エラー (タップ)"; });
         }
 
         canvas.addEventListener('touchstart', (e) => {
@@ -205,6 +198,11 @@
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
         }
 
+        const zones = {
+            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
+            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
+        };
+
         function analyze() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
                 canvas.width = video.videoWidth; canvas.height = video.videoHeight;
@@ -232,7 +230,12 @@
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
-                setTimeout(() => { isCoolingDown = false; timerDisplay.innerText = "0.00s"; try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} }, 10000);
+                // 【変更】設定された resetInterval 秒後にリセット処理を実行
+                setTimeout(() => { 
+                    isCoolingDown = false; 
+                    timerDisplay.innerText = "0.00s"; 
+                    try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} 
+                }, resetInterval);
             }
         }
     </script>
