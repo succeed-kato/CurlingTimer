@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Pro Video Toggle</title>
+    <title>Curling Timer - Pro Rec</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -13,19 +13,30 @@
         #timer-container { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 100; }
         #timer { font-size: 110px; font-weight: bold; text-shadow: 4px 4px 8px #000; color: #0f0; }
         
-        /* 録画中インジケーター */
         #rec-indicator { position: absolute; top: 75px; left: 20px; color: red; font-weight: bold; font-size: 14px; display: none; z-index: 1000; }
         #rec-indicator::before { content: "● "; }
 
-        /* 上部コントロール */
-        .top-controls { position: absolute; top: 15px; left: 0; width: 100%; display: flex; flex-direction: row; justify-content: center; align-items: stretch; gap: 5px; padding: 5px 8px; box-sizing: border-box; z-index: 9999; background: rgba(0, 0, 0, 0.4); }
-        .btn-back { flex: 0.8; padding: 10px 0; background: #555; color: #fff; border: 1px solid #888; border-radius: 8px; font-size: 11px; font-weight: bold; min-height: 40px; }
-        .btn-reset { flex: 1.5; padding: 10px 0; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 15px; min-height: 40px; }
+        /* 上部コントロール：5つの要素を横並びに */
+        .top-controls { 
+            position: absolute; top: 15px; left: 0; width: 100%; 
+            display: flex; flex-direction: row; justify-content: center; align-items: stretch; 
+            gap: 4px; padding: 5px 6px; box-sizing: border-box; z-index: 9999; 
+            background: rgba(0, 0, 0, 0.4); 
+        }
+        
+        .btn-back { flex: 0.6; padding: 10px 0; background: #555; color: #fff; border: 1px solid #888; border-radius: 8px; font-size: 10px; font-weight: bold; min-height: 40px; }
+        .btn-reset { flex: 1.2; padding: 10px 0; background: #2196F3; color: #fff; border: 2px solid #fff; border-radius: 8px; font-weight: bold; font-size: 14px; min-height: 40px; }
         .btn-reset:active { background: #0D47A1; transform: scale(0.95); }
-        #peer-id-display { flex: 2.2; font-size: 11px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #666; min-height: 40px; }
-        #interval-select { flex: 1.2; background: #444; color: #0f0; border: 1px solid #0f0; border-radius: 8px; font-size: 12px; font-weight: bold; text-align: center; outline: none; appearance: none; }
 
-        /* サイドスライダー */
+        #peer-id-display { flex: 1.8; font-size: 10px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #666; min-height: 40px; }
+
+        /* メイン画面の録画ボタン */
+        .btn-rec-toggle { flex: 0.8; background: #444; color: #fff; border: 1px solid #ff4444; border-radius: 8px; font-size: 10px; font-weight: bold; min-height: 40px; }
+        .btn-rec-toggle.active { background: #ff4444; color: #fff; }
+
+        #interval-select { flex: 1; background: #444; color: #0f0; border: 1px solid #0f0; border-radius: 8px; font-size: 11px; font-weight: bold; text-align: center; outline: none; appearance: none; }
+
+        /* スライダー */
         .side-controls-right { position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         .side-controls-left { position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         input[type=range] { width: 180px; height: 40px; }
@@ -35,26 +46,20 @@
         .label-text-left { font-size: 10px; color: #888; transform: rotate(-90deg); }
 
         #status-log { position: absolute; bottom: 5px; right: 5px; font-size: 9px; color: #888; z-index: 1000; }
-
-        /* 【更新】スタートオーバーレイ：録画設定を追加 */
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; margin-bottom: 30px; }
         .rec-setting-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; border: 1px solid #444; }
-        .rec-toggle-label { font-size: 18px; color: #eee; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        #rec-toggle { transform: scale(1.8); cursor: pointer; }
     </style>
 </head>
 <body>
     <div id="start-overlay">
         <h2 style="margin-bottom:20px;">カーリング・タイマー</h2>
         <button class="btn-start" onclick="startApp()">アプリを起動する</button>
-        
         <div class="rec-setting-box">
-            <label class="rec-toggle-label">
-                <input type="checkbox" id="rec-toggle" checked>
-                <span>自動録画機能をONにする</span>
+            <label style="font-size:18px; color:#eee; display:flex; align-items:center; gap:10px;">
+                <input type="checkbox" id="rec-toggle-init" checked style="transform:scale(1.8);">
+                <span>自動録画を有効にする</span>
             </label>
-            <p style="font-size:12px; color:#aaa; margin-top:10px;">※保存先: ダウンロードフォルダ</p>
         </div>
     </div>
 
@@ -67,7 +72,8 @@
         <div class="top-controls">
             <button class="btn-back" onclick="goBack()">戻る</button>
             <button class="btn-reset" onclick="calibrate()">リセット</button>
-            <div id="peer-id-display" onclick="initPeer()">ID: 取得中...</div>
+            <div id="peer-id-display" onclick="initPeer()">ID取得..</div>
+            <button id="main-rec-btn" class="btn-rec-toggle" onclick="toggleRecordingMain()">録画:OFF</button>
             <select id="interval-select" onchange="updateInterval(this.value)">
                 <option value="5000">5秒</option>
                 <option value="10000" selected>10秒</option>
@@ -87,7 +93,6 @@
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
             <div id="threshold-value" class="val-disp">25</div>
         </div>
-
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
 
@@ -98,6 +103,7 @@
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const timerDisplay = document.getElementById('timer');
         const idDisplay = document.getElementById('peer-id-display');
+        const mainRecBtn = document.getElementById('main-rec-btn');
         const threshValDisp = document.getElementById('threshold-value');
         const zoomValDisp = document.getElementById('zoom-value');
         const statusLog = document.getElementById('status-log');
@@ -105,32 +111,50 @@
         const recIndicator = document.getElementById('rec-indicator');
 
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
-        let currentThreshold = 25;
+        let currentThreshold = 25, resetInterval = 10000;
         let conn = null, peer = null;
-        let resetInterval = 10000;
 
-        // --- 録画用変数 ---
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let isRecordingEnabled = true; // 設定値を保持
+        // --- 録画ロジック改善 ---
+        let mediaRecorder = null, recordedChunks = [], isRecordingEnabled = true;
 
         function updateLog(msg) { statusLog.innerText = msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
-        function updateInterval(val) { resetInterval = parseInt(val); updateLog("Interval: " + (resetInterval/1000) + "s"); }
+        function updateInterval(val) { resetInterval = parseInt(val); updateLog("Intv: " + (resetInterval/1000) + "s"); }
+
+        function toggleRecordingMain() {
+            isRecordingEnabled = !isRecordingEnabled;
+            updateRecUI();
+            if (isRecordingEnabled) {
+                if (video.srcObject) setupRecorder(video.srcObject);
+            } else {
+                if (mediaRecorder) mediaRecorder.stop();
+                mediaRecorder = null;
+                recordedChunks = [];
+            }
+        }
+
+        function updateRecUI() {
+            if (isRecordingEnabled) {
+                mainRecBtn.innerText = "録画:ON";
+                mainRecBtn.classList.add('active');
+            } else {
+                mainRecBtn.innerText = "録画:OFF";
+                mainRecBtn.classList.remove('active');
+                recIndicator.style.display = "none";
+            }
+        }
 
         async function updateZoom(val) {
             zoomValDisp.innerText = "x" + val;
             const [track] = video.srcObject.getVideoTracks();
             if (track.getCapabilities().zoom) {
-                try { await track.applyConstraints({ advanced: [{ zoom: val }] }); } catch (e) { console.error(e); }
+                try { await track.applyConstraints({ advanced: [{ zoom: val }] }); } catch (e) {}
             }
         }
 
         function startApp() {
-            // スタート画面のチェックボックス状態を確認
-            isRecordingEnabled = document.getElementById('rec-toggle').checked;
-            updateLog(isRecordingEnabled ? "Recording Mode" : "Timer Only Mode");
-            
+            isRecordingEnabled = document.getElementById('rec-toggle-init').checked;
+            updateRecUI();
             startOverlay.style.display = 'none';
             if (!peer) initPeer();
             if (!video.srcObject) initCamera();
@@ -143,13 +167,7 @@
                 const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
                 video.srcObject = stream;
                 await video.play();
-                updateLog("Camera OK");
-
-                // 設定がONの場合のみレコーダーを起動
-                if (isRecordingEnabled) {
-                    setupRecorder(stream);
-                }
-
+                if (isRecordingEnabled) setupRecorder(stream);
                 const [track] = stream.getVideoTracks();
                 const caps = track.getCapabilities();
                 if (caps.zoom) {
@@ -161,60 +179,57 @@
         }
 
         function setupRecorder(stream) {
+            if (mediaRecorder) return;
             mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
             mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) recordedChunks.push(e.data);
+                if (e.data.size > 0) {
+                    recordedChunks.push(e.data);
+                    // 【改善】タイマーが動いていない時は、直近の約2秒（2個のチャンク）だけ残して古いものを捨てる
+                    if (!isRunning && !isCoolingDown) {
+                        if (recordedChunks.length > 2) {
+                            recordedChunks.shift(); 
+                        }
+                    }
+                }
             };
             mediaRecorder.onstop = () => {
-                const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.style.display = 'none';
-                a.href = url;
-                a.download = `curling_${new Date().getTime()}.webm`;
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(() => {
-                    document.body.removeChild(a);
+                if (recordedChunks.length > 0 && isRecordingEnabled) {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `curling_${new Date().getTime()}.webm`;
+                    a.click();
                     window.URL.revokeObjectURL(url);
-                }, 100);
+                }
                 recordedChunks = [];
-                mediaRecorder.start(1000); 
+                // 自動的に次の投球のために再開
+                if (isRecordingEnabled) mediaRecorder.start(1000);
             };
-            mediaRecorder.start(1000);
+            mediaRecorder.start(1000); // 1秒ごとにチャンクを生成
         }
 
         function initPeer() {
-            idDisplay.innerText = "ID: 取得中...";
+            idDisplay.innerText = "取得中..";
             if (peer) peer.destroy();
             const myId = Math.random().toString(36).substring(2, 8);
             peer = new Peer(myId);
-            peer.on('open', id => { idDisplay.innerText = "ID: " + id; updateLog("Ready"); });
+            peer.on('open', id => { idDisplay.innerText = "ID:" + id; });
             peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
-            peer.on('error', (err) => { idDisplay.innerText = "ID: エラー (タップ)"; });
         }
 
-        canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const rect = canvas.getBoundingClientRect();
-            const touchX = (e.touches[0].clientX - rect.left) / rect.width;
-            const touchY = (e.touches[0].clientY - rect.top) / rect.height;
-            for (let key in zones) {
-                const z = zones[key];
-                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { draggingZone = z; break; }
-            }
-        }, { passive: false });
+        function calibrate() {
+            baseStartColor = getAverageColor(zones.start);
+            baseEndColor = getAverageColor(zones.end);
+            isRunning = false; isCoolingDown = false;
+            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
+            recordedChunks = []; // 不要なバッファをクリア
+        }
 
-        canvas.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (draggingZone) {
-                const rect = canvas.getBoundingClientRect();
-                draggingZone.x = (e.touches[0].clientX - rect.left) / rect.width - draggingZone.w / 2;
-                draggingZone.y = (e.touches[0].clientY - rect.top) / rect.height - draggingZone.h / 2;
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', () => { draggingZone = null; });
+        const zones = {
+            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
+            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
+        };
 
         function getAverageColor(zone) {
             const px = Math.floor((zone.x + zone.w/2) * canvas.width);
@@ -225,19 +240,6 @@
                 return sum / 100;
             } catch(e) { return 0; }
         }
-
-        function calibrate() {
-            baseStartColor = getAverageColor(zones.start);
-            baseEndColor = getAverageColor(zones.end);
-            isRunning = false; isCoolingDown = false;
-            timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            if (isRecordingEnabled) recordedChunks = []; 
-        }
-
-        const zones = {
-            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
-            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
-        };
 
         function analyze() {
             if (video.readyState === video.HAVE_ENOUGH_DATA) {
@@ -259,20 +261,17 @@
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
 
             if (!isRunning && sDiff > currentThreshold) {
-                startTime = Date.now(); 
-                isRunning = true;
+                startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red";
                 if (isRecordingEnabled) recIndicator.style.display = "block";
             }
 
             if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
-                isRunning = false; 
-                isCoolingDown = true;
+                isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
                 const fTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
 
-                // 設定がONの場合のみ、2秒後に停止・保存
                 if (isRecordingEnabled) {
                     setTimeout(() => {
                         if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -283,8 +282,7 @@
                 }
 
                 setTimeout(() => { 
-                    isCoolingDown = false; 
-                    timerDisplay.innerText = "0.00s"; 
+                    isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
                     try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} 
                 }, resetInterval);
             }
