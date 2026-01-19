@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Pro Rec</title>
+    <title>Curling Timer - Ultimate</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -16,7 +16,6 @@
         #rec-indicator { position: absolute; top: 75px; left: 20px; color: red; font-weight: bold; font-size: 14px; display: none; z-index: 1000; }
         #rec-indicator::before { content: "● "; }
 
-        /* 上部コントロール：5つの要素を横並びに */
         .top-controls { 
             position: absolute; top: 15px; left: 0; width: 100%; 
             display: flex; flex-direction: row; justify-content: center; align-items: stretch; 
@@ -30,13 +29,11 @@
 
         #peer-id-display { flex: 1.8; font-size: 10px; font-weight: bold; background: rgba(50, 50, 50, 0.9); color: #fff; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #666; min-height: 40px; }
 
-        /* メイン画面の録画ボタン */
         .btn-rec-toggle { flex: 0.8; background: #444; color: #fff; border: 1px solid #ff4444; border-radius: 8px; font-size: 10px; font-weight: bold; min-height: 40px; }
         .btn-rec-toggle.active { background: #ff4444; color: #fff; }
 
         #interval-select { flex: 1; background: #444; color: #0f0; border: 1px solid #0f0; border-radius: 8px; font-size: 11px; font-weight: bold; text-align: center; outline: none; appearance: none; }
 
-        /* スライダー */
         .side-controls-right { position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         .side-controls-left { position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
         input[type=range] { width: 180px; height: 40px; }
@@ -73,7 +70,7 @@
             <button class="btn-back" onclick="goBack()">戻る</button>
             <button class="btn-reset" onclick="calibrate()">リセット</button>
             <div id="peer-id-display" onclick="initPeer()">ID取得..</div>
-            <button id="main-rec-btn" class="btn-rec-toggle" onclick="toggleRecordingMain()">録画:OFF</button>
+            <button id="main-rec-btn" class="btn-rec-toggle" onclick="toggleRecordingMain()">録画:ON</button>
             <select id="interval-select" onchange="updateInterval(this.value)">
                 <option value="5000">5秒</option>
                 <option value="10000" selected>10秒</option>
@@ -113,8 +110,9 @@
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         let currentThreshold = 25, resetInterval = 10000;
         let conn = null, peer = null;
+        let lastMeasuredTime = "0.00s"; // ファイル名用
 
-        // --- 録画ロジック改善 ---
+        // --- 録画ロジック ---
         let mediaRecorder = null, recordedChunks = [], isRecordingEnabled = true;
 
         function updateLog(msg) { statusLog.innerText = msg; }
@@ -178,35 +176,41 @@
             } catch (err) { updateLog("Camera Error"); }
         }
 
+        // --- 録画セットアップ：MP4優先・タイムファイル名対応 ---
         function setupRecorder(stream) {
             if (mediaRecorder) return;
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+            
+            // Androidでの再生互換性を高めるためのMIMEタイプ設定
+            const mimeTypes = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8'];
+            const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+
+            mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+            
             mediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) {
                     recordedChunks.push(e.data);
-                    // 【改善】タイマーが動いていない時は、直近の約2秒（2個のチャンク）だけ残して古いものを捨てる
                     if (!isRunning && !isCoolingDown) {
-                        if (recordedChunks.length > 2) {
-                            recordedChunks.shift(); 
-                        }
+                        if (recordedChunks.length > 2) recordedChunks.shift(); // 直近2秒分を保持
                     }
                 }
             };
+            
             mediaRecorder.onstop = () => {
                 if (recordedChunks.length > 0 && isRecordingEnabled) {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = `curling_${new Date().getTime()}.webm`;
+                    const extension = mediaRecorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
+                    // ファイル名にタイムを反映
+                    a.download = `curling_${lastMeasuredTime.replace('.', '_')}.${extension}`;
                     a.click();
                     window.URL.revokeObjectURL(url);
                 }
                 recordedChunks = [];
-                // 自動的に次の投球のために再開
                 if (isRecordingEnabled) mediaRecorder.start(1000);
             };
-            mediaRecorder.start(1000); // 1秒ごとにチャンクを生成
+            mediaRecorder.start(1000);
         }
 
         function initPeer() {
@@ -223,7 +227,7 @@
             baseEndColor = getAverageColor(zones.end);
             isRunning = false; isCoolingDown = false;
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
-            recordedChunks = []; // 不要なバッファをクリア
+            recordedChunks = [];
         }
 
         const zones = {
@@ -269,8 +273,8 @@
             if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
-                const fTime = timerDisplay.innerText;
-                try { if (conn && conn.open) conn.send(fTime); } catch (e) {}
+                lastMeasuredTime = timerDisplay.innerText; // タイムを保持
+                try { if (conn && conn.open) conn.send(lastMeasuredTime); } catch (e) {}
 
                 if (isRecordingEnabled) {
                     setTimeout(() => {
