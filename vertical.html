@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Fixed Pro</title>
+    <title>Curling Timer - Manual Focus Pro</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -34,25 +34,30 @@
 
         #interval-select { flex: 1; background: #444; color: #0f0; border: 1px solid #0f0; border-radius: 8px; font-size: 11px; font-weight: bold; text-align: center; outline: none; appearance: none; }
 
+        /* スライダー類 */
         .side-controls-right { position: absolute; right: -130px; top: 50%; transform: translateY(-50%) rotate(-90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
-        .side-controls-left { position: absolute; left: -130px; top: 50%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
-        input[type=range] { width: 180px; height: 40px; }
+        
+        /* 左側：ズームとピントを並べる */
+        .side-controls-left-zoom { position: absolute; left: -130px; top: 35%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
+        .side-controls-left-focus { position: absolute; left: -130px; top: 65%; transform: translateY(-50%) rotate(90deg); display: flex; align-items: center; gap: 15px; z-index: 9999; pointer-events: auto; background: rgba(51, 51, 51, 0.4); padding: 2px 20px; border-radius: 5px; }
+
+        input[type=range] { width: 160px; height: 40px; }
         .val-disp { font-size: 14px; font-weight: bold; color: #2196F3; width: 35px; transform: rotate(90deg); text-align: center; }
         .val-disp-left { font-size: 14px; font-weight: bold; color: #FF9800; width: 35px; transform: rotate(-90deg); text-align: center; }
+        .val-disp-focus { font-size: 14px; font-weight: bold; color: #4CAF50; width: 35px; transform: rotate(-90deg); text-align: center; }
         .label-text-right { font-size: 10px; color: #888; transform: rotate(90deg); }
         .label-text-left { font-size: 10px; color: #888; transform: rotate(-90deg); }
 
         #status-log { position: absolute; bottom: 5px; right: 5px; font-size: 9px; color: #888; z-index: 1000; }
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
-        .rec-setting-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; border: 1px solid #444; width: 80%; }
     </style>
 </head>
 <body>
     <div id="start-overlay">
         <h2 style="margin-bottom:20px;">カーリング・タイマー</h2>
         <button class="btn-start" onclick="startApp()">アプリを起動する</button>
-        <div class="rec-setting-box">
+        <div style="background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px;">
             <label style="font-size:18px; color:#eee; display:flex; align-items:center; gap:10px;">
                 <input type="checkbox" id="rec-toggle-init" checked style="transform:scale(1.8);">
                 <span>自動録画を有効にする</span>
@@ -80,16 +85,24 @@
             </select>
         </div>
 
-        <div class="side-controls-left">
+        <div class="side-controls-left-zoom">
             <div class="label-text-left">ズーム</div>
             <input type="range" id="zoom-slider" min="1" max="3.5" step="0.1" value="1" oninput="updateZoom(this.value)">
             <div id="zoom-value" class="val-disp-left">x1</div>
         </div>
+
+        <div class="side-controls-left-focus" id="focus-area" style="display:none;">
+            <div class="label-text-left">ピント</div>
+            <input type="range" id="focus-slider" min="0" max="10" step="0.1" value="0" oninput="updateFocus(this.value)">
+            <div id="focus-value" class="val-disp-focus">0</div>
+        </div>
+
         <div class="side-controls-right">
             <div class="label-text-right">感度</div>
             <input type="range" id="threshold-slider" min="5" max="80" value="25" oninput="updateThreshold(this.value)">
             <div id="threshold-value" class="val-disp">25</div>
         </div>
+
         <div id="timer-container"><div id="timer">0.00s</div></div>
     </div>
 
@@ -103,18 +116,17 @@
         const mainRecBtn = document.getElementById('main-rec-btn');
         const threshValDisp = document.getElementById('threshold-value');
         const zoomValDisp = document.getElementById('zoom-value');
+        const focusValDisp = document.getElementById('focus-value');
         const statusLog = document.getElementById('status-log');
         const startOverlay = document.getElementById('start-overlay');
         const recIndicator = document.getElementById('rec-indicator');
 
-        // 変数宣言
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         let currentThreshold = 25, resetInterval = 10000;
         let conn = null, peer = null;
         let lastMeasuredTime = "0.00s";
-        let draggingZone = null; // ← 【復活】これを忘れていました！
+        let draggingZone = null; 
 
-        // 録画用
         let mediaRecorder = null, recordedChunks = [], isRecordingEnabled = true;
 
         const zones = {
@@ -146,10 +158,22 @@
             }
         }
 
+        // ピント調節
+        async function updateFocus(val) {
+            const [track] = video.srcObject.getVideoTracks();
+            try {
+                await track.applyConstraints({
+                    advanced: [{ focusMode: 'manual', focusDistance: parseFloat(val) }]
+                });
+                focusValDisp.innerText = val;
+            } catch (e) { console.error("Focus Error", e); }
+        }
+
         async function updateZoom(val) {
             zoomValDisp.innerText = "x" + val;
             const [track] = video.srcObject.getVideoTracks();
-            if (track.getCapabilities().zoom) {
+            const caps = track.getCapabilities();
+            if (caps.zoom) {
                 try { await track.applyConstraints({ advanced: [{ zoom: val }] }); } catch (e) {}
             }
         }
@@ -172,10 +196,22 @@
                 if (isRecordingEnabled) setupRecorder(stream);
                 const [track] = stream.getVideoTracks();
                 const caps = track.getCapabilities();
+
+                // ズーム設定
                 if (caps.zoom) {
                     const slider = document.getElementById('zoom-slider');
                     slider.min = caps.zoom.min; slider.max = Math.min(caps.zoom.max, 3.5); slider.step = caps.zoom.step;
                 }
+
+                // ピント設定（マニュアルフォーカスがサポートされている場合のみ表示）
+                if (caps.focusDistance) {
+                    document.getElementById('focus-area').style.display = 'flex';
+                    const fSlider = document.getElementById('focus-slider');
+                    fSlider.min = caps.focusDistance.min;
+                    fSlider.max = caps.focusDistance.max;
+                    fSlider.step = caps.focusDistance.step;
+                }
+
                 requestAnimationFrame(analyze);
             } catch (err) { updateLog("Camera Error"); }
         }
@@ -208,7 +244,7 @@
                     if (isRecordingEnabled) mediaRecorder.start(1000);
                 };
                 mediaRecorder.start(1000);
-            } catch (e) { updateLog("Rec Error: " + e.message); }
+            } catch (e) { updateLog("Rec Error"); }
         }
 
         function initPeer() {
@@ -220,7 +256,6 @@
             peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
         }
 
-        // タッチイベント設定
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault();
             const rect = canvas.getBoundingClientRect();
@@ -229,8 +264,7 @@
             for (let key in zones) {
                 const z = zones[key];
                 if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { 
-                    draggingZone = z; 
-                    break; 
+                    draggingZone = z; break; 
                 }
             }
         }, { passive: false });
