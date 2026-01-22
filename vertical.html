@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Curling Timer - Ultimate</title>
+    <title>Curling Timer - Fixed Pro</title>
     <style>
         body { margin: 0; background: #000; color: white; text-align: center; font-family: sans-serif; overflow: hidden; touch-action: none; }
         #container { position: relative; width: 100vw; height: 100vh; background: #111; }
@@ -44,8 +44,8 @@
 
         #status-log { position: absolute; bottom: 5px; right: 5px; font-size: 9px; color: #888; z-index: 1000; }
         #start-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-        .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; margin-bottom: 30px; }
-        .rec-setting-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; border: 1px solid #444; }
+        .btn-start { padding: 30px 50px; background: #4CAF50; color: white; border: none; border-radius: 20px; font-size: 24px; font-weight: bold; margin-bottom: 20px; }
+        .rec-setting-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 15px; border: 1px solid #444; width: 80%; }
     </style>
 </head>
 <body>
@@ -107,13 +107,20 @@
         const startOverlay = document.getElementById('start-overlay');
         const recIndicator = document.getElementById('rec-indicator');
 
+        // 変数宣言
         let startTime = 0, isRunning = false, isCoolingDown = false, baseStartColor = null, baseEndColor = null;
         let currentThreshold = 25, resetInterval = 10000;
         let conn = null, peer = null;
-        let lastMeasuredTime = "0.00s"; // ファイル名用
+        let lastMeasuredTime = "0.00s";
+        let draggingZone = null; // ← 【復活】これを忘れていました！
 
-        // --- 録画ロジック ---
+        // 録画用
         let mediaRecorder = null, recordedChunks = [], isRecordingEnabled = true;
+
+        const zones = {
+            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
+            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
+        };
 
         function updateLog(msg) { statusLog.innerText = msg; }
         function updateThreshold(val) { currentThreshold = parseInt(val); threshValDisp.innerText = val; }
@@ -126,18 +133,15 @@
                 if (video.srcObject) setupRecorder(video.srcObject);
             } else {
                 if (mediaRecorder) mediaRecorder.stop();
-                mediaRecorder = null;
-                recordedChunks = [];
+                mediaRecorder = null; recordedChunks = [];
             }
         }
 
         function updateRecUI() {
             if (isRecordingEnabled) {
-                mainRecBtn.innerText = "録画:ON";
-                mainRecBtn.classList.add('active');
+                mainRecBtn.innerText = "録画:ON"; mainRecBtn.classList.add('active');
             } else {
-                mainRecBtn.innerText = "録画:OFF";
-                mainRecBtn.classList.remove('active');
+                mainRecBtn.innerText = "録画:OFF"; mainRecBtn.classList.remove('active');
                 recIndicator.style.display = "none";
             }
         }
@@ -176,41 +180,35 @@
             } catch (err) { updateLog("Camera Error"); }
         }
 
-        // --- 録画セットアップ：MP4優先・タイムファイル名対応 ---
         function setupRecorder(stream) {
             if (mediaRecorder) return;
-            
-            // Androidでの再生互換性を高めるためのMIMEタイプ設定
-            const mimeTypes = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp8'];
-            const mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
-
-            mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
-            
-            mediaRecorder.ondataavailable = (e) => {
-                if (e.data.size > 0) {
-                    recordedChunks.push(e.data);
-                    if (!isRunning && !isCoolingDown) {
-                        if (recordedChunks.length > 2) recordedChunks.shift(); // 直近2秒分を保持
+            const mimeType = 'video/webm;codecs=vp8';
+            try {
+                mediaRecorder = new MediaRecorder(stream, { mimeType: mimeType });
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        recordedChunks.push(e.data);
+                        if (!isRunning && !isCoolingDown) {
+                            if (recordedChunks.length > 2) recordedChunks.shift();
+                        }
                     }
-                }
-            };
-            
-            mediaRecorder.onstop = () => {
-                if (recordedChunks.length > 0 && isRecordingEnabled) {
-                    const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    const extension = mediaRecorder.mimeType.includes('mp4') ? 'mp4' : 'webm';
-                    // ファイル名にタイムを反映
-                    a.download = `curling_${lastMeasuredTime.replace('.', '_')}.${extension}`;
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                }
-                recordedChunks = [];
-                if (isRecordingEnabled) mediaRecorder.start(1000);
-            };
-            mediaRecorder.start(1000);
+                };
+                mediaRecorder.onstop = () => {
+                    if (recordedChunks.length > 0 && isRecordingEnabled) {
+                        const blob = new Blob(recordedChunks, { type: mimeType });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        const timeStr = lastMeasuredTime.replace('s', '').replace('.', '_');
+                        a.download = `curling_${timeStr}s.webm`;
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    }
+                    recordedChunks = [];
+                    if (isRecordingEnabled) mediaRecorder.start(1000);
+                };
+                mediaRecorder.start(1000);
+            } catch (e) { updateLog("Rec Error: " + e.message); }
         }
 
         function initPeer() {
@@ -222,6 +220,32 @@
             peer.on('connection', (newConn) => { conn = newConn; idDisplay.style.background = "#4CAF50"; });
         }
 
+        // タッチイベント設定
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touchX = (e.touches[0].clientX - rect.left) / rect.width;
+            const touchY = (e.touches[0].clientY - rect.top) / rect.height;
+            for (let key in zones) {
+                const z = zones[key];
+                if (touchX > z.x - 0.1 && touchX < z.x + z.w + 0.1 && touchY > z.y - 0.08 && touchY < z.y + z.h + 0.08) { 
+                    draggingZone = z; 
+                    break; 
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (draggingZone) {
+                const rect = canvas.getBoundingClientRect();
+                draggingZone.x = (e.touches[0].clientX - rect.left) / rect.width - draggingZone.w / 2;
+                draggingZone.y = (e.touches[0].clientY - rect.top) / rect.height - draggingZone.h / 2;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', () => { draggingZone = null; });
+
         function calibrate() {
             baseStartColor = getAverageColor(zones.start);
             baseEndColor = getAverageColor(zones.end);
@@ -229,11 +253,6 @@
             timerDisplay.innerText = "0.00s"; timerDisplay.style.color = "#0f0";
             recordedChunks = [];
         }
-
-        const zones = {
-            start: { x: 0.2, y: 0.15, w: 0.6, h: 0.05, color: "yellow" },
-            end:   { x: 0.2, y: 0.75, w: 0.6, h: 0.05, color: "cyan" }
-        };
 
         function getAverageColor(zone) {
             const px = Math.floor((zone.x + zone.w/2) * canvas.width);
@@ -263,19 +282,16 @@
         function checkMotion() {
             const sDiff = Math.abs(getAverageColor(zones.start) - baseStartColor);
             const eDiff = Math.abs(getAverageColor(zones.end) - baseEndColor);
-
             if (!isRunning && sDiff > currentThreshold) {
                 startTime = Date.now(); isRunning = true;
                 timerDisplay.style.color = "red";
                 if (isRecordingEnabled) recIndicator.style.display = "block";
             }
-
             if (isRunning && (Date.now() - startTime > 1500) && eDiff > currentThreshold) {
                 isRunning = false; isCoolingDown = true;
                 timerDisplay.style.color = "#0f0";
-                lastMeasuredTime = timerDisplay.innerText; // タイムを保持
+                lastMeasuredTime = timerDisplay.innerText;
                 try { if (conn && conn.open) conn.send(lastMeasuredTime); } catch (e) {}
-
                 if (isRecordingEnabled) {
                     setTimeout(() => {
                         if (mediaRecorder && mediaRecorder.state === "recording") {
@@ -284,7 +300,6 @@
                         }
                     }, 2000);
                 }
-
                 setTimeout(() => { 
                     isCoolingDown = false; timerDisplay.innerText = "0.00s"; 
                     try { if (conn && conn.open) conn.send("RESET_OK"); } catch (e) {} 
